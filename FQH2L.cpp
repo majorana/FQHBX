@@ -511,6 +511,7 @@ void build_Interaction_mat(Matrix &matrix,
     int count = 0;
     for (auto it : states)
     {//go through all states in the list of "states"
+    cout<<"Let's do the first layer"<<endl;
     //Then we run through the orbitals on the first layer
         for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
             for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2])
@@ -567,8 +568,9 @@ void build_Interaction_mat(Matrix &matrix,
                                     mat_ele.amplitude = -amplitude;
                                 }
 
+                                printFullMatEle(mat_ele, states);
 
-                                if(abs(real(amplitude))>SmallDouble || abs(imag(amplitude))>SmallDouble)
+                                if(abs(amplitude)>SmallDouble)
                                 {
                                     bra_ket temp(it.state_id - StateIdShift, newid - StateIdShift);
                                     if (sign_counter % 2 == 0)
@@ -582,6 +584,7 @@ void build_Interaction_mat(Matrix &matrix,
                     }
                 }
         //Then we run through the states on the second layer
+        cout<<"Let's move to the second layer"<<endl;
         for (int pos1 = ham.mrange; pos1 < ham.norb; pos1++) if (it.cstate[pos1])
             for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2])
                 if (pos2 != pos1)
@@ -636,8 +639,8 @@ void build_Interaction_mat(Matrix &matrix,
                                 } else {
                                     mat_ele.amplitude = -amplitude;
                                 }
-
-
+                               
+                                printFullMatEle(mat_ele, states);
                                 if(abs(amplitude)>SmallDouble)
                                 {
                                     bra_ket temp(it.state_id - StateIdShift, newid - StateIdShift);
