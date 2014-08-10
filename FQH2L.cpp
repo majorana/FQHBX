@@ -49,7 +49,7 @@ using namespace std;
 
 const double pi = 3.14159;
 
-const int MaxOrbital = 32;
+const int MaxOrbital = 40;
 
 const int StateIdShift = 100;
 
@@ -64,9 +64,9 @@ const double Tiny = 0.001;
 ////////////////////////////////////////////////////////////////////////////////
 struct Hamiltonian
 {
-    unsigned norb, nele;
+    unsigned norb, nele, mrange;
     int lanczosNE;
-    double t;
+    double t, a, b;
     double CoulombForm[MaxOrbital/2][MaxOrbital/2][MaxOrbital/2][MaxOrbital/2];
 };
 
@@ -81,7 +81,7 @@ struct Orbital
     { return m == rhs.m && layer == rhs.layer; }
     Orbital operator+ (const Orbital &rhs) const
     {
-        Orbital temp(m+rhs.m, layer);
+        Orbital temp( (m+rhs.m)%ham.mrange, layer);
         if (layer != rhs.layer)
         {
             cout<<"Orbital addition error: cannot add two orbitals in different layers"<<endl;
@@ -110,7 +110,7 @@ struct OrbPair
     OrbPair(){}
     OrbPair(const Orbital& orba, const Orbital& orbb)
     {
-        orb1 = orba, orb2 = orbb; m=orb1.m+orb2.m;
+        orb1 = orba, orb2 = orbb; m=((orb1.m+orb2.m)%ham.mrange);
         if (orb1.layer != orb2.layer)
         {
             cout<<"OrbPair error: cannot form pairs in different layers"<<endl;
@@ -185,7 +185,7 @@ typedef unordered_map<Orbital, vector<OrbPair>, Orbital_hasher> PairGroup;
 //Momentum -> states with this momentum
 typedef unordered_map<int, vector<CompactState> > cStateMap;
 //State occupation -> state id
-typedef unordered_map<unsigned long, unsigned int> ReferenceMap;
+typedef unordered_map<unsigned long long, unsigned int> ReferenceMap;
 
 
 
@@ -273,14 +273,36 @@ vector<Orbital> generate_orblist()
     return orblist;
 }
 
+double V(int k, int m, int a, int b, int Ns)
+{
+    int cutoff = 50;
+    double v = 0;
+    
+    for (int nx = -cutoff; nx <= cutoff; nx++)
+        for (int ny = 1; ny <= cutoff; ny++) 
+         {
+             double q = sqrt( pow(2*pi * (Ns*nx+k)/a, 2)+ pow(2*pi * ny/b, 2));
+             if (m == 0)
+                 v += 2.0/q * exp(-0.5 * q * q);
+             else
+                v += 2.0/q*exp(-0.5 * q * q) * cos(2 * pi * m * ny / Ns);
+         }
+     return v/Ns;
+}
+
 void compute_Coulomb_Forms(vector<Orbital> orblist)
 {
     int mrange = ham.norb/2;
     for(int i = 0; i < mrange; i++) for(int j = 0; j < mrange; j++)
-        for(int m = 0; i < mrange; m++) for(int n = 0; n < mrange; n++)
-            ham.CoulombForm[i][j][m][n] = 0;
-    // to be finished with the Coulomb interaction
+        for(int m = 0; m < mrange; m++) for(int n = 0; n < mrange; n++)
+        {
+            if (i+j == m+n)
+                ham.CoulombForm[i][j][m][n] = V(j-n, i-n, ham.a, ham.b, mrange);
+            else
+                ham.CoulombForm[i][j][m][n] = 0;
+        }
 }
+
 
 
 OrbMap generate_orb_idlist(vector<Orbital> orblist)
@@ -344,7 +366,7 @@ int compute_momentum(CompactState &cstate, vector<Orbital>& orblist)
             m += orblist[i].m;
         }
     }
-    return m;
+    return (m%ham.mrange);
 }
 
 void cs_plusplus(CompactState& cstate)
@@ -410,7 +432,7 @@ void decorate_state(vector<CompactState> &cstates, vector<State> &dec_states,\
     {
         State temp(cstates[i]);
         temp.state_id = i + StateIdShift;
-        refMap[cstates[i].to_ulong()] = i + StateIdShift;
+        refMap[cstates[i].to_ullong()] = i + StateIdShift;
         dec_states.push_back(temp);
     }
 }
@@ -448,7 +470,7 @@ void build_hopping_mat(Matrix &matrix, vector<State> &states,\
                     temp_cstate[i] = 1;
                 }
                 mat_ele.bra = it.state_id-StateIdShift;
-                mat_ele.ket = reference_list[temp_cstate.to_ulong()];
+                mat_ele.ket = reference_list[temp_cstate.to_ullong()];
                 if (mat_ele.ket == 0) {
                     cout << "State reference error: ket state not found while\
                         building kinetic terms."<<endl;
@@ -487,11 +509,11 @@ void build_Interaction_mat(Matrix &matrix,
         OrbMap &orb_idlist)
 {
     int count = 0;
-    int mrange = ham.norb/2;
     for (auto it : states)
     {//go through all states in the list of "states"
-        for (int pos1 = 0; pos1 < mrange; pos1++) if (it.cstate[pos1])
-            for (int pos2 = 0; pos2 < mrange; pos2++)if (it.cstate[pos2])
+    //Then we run through the orbitals on the first layer
+        for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
+            for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2])
                 if (pos2 != pos1)
                 {
                     Orbital totalprop = orblist[pos1] + orblist[pos2];
@@ -522,7 +544,7 @@ void build_Interaction_mat(Matrix &matrix,
                                 for (int i = 0; i < new1; i++) if (tempcstate[i]) sign_counter++;
                                 tempcstate[new1] = 1;
 
-                                int newid = reference_list[tempcstate.to_ulong()];
+                                int newid = reference_list[tempcstate.to_ullong()];
 
                                 if (newid == 0)
                                 {
@@ -559,8 +581,78 @@ void build_Interaction_mat(Matrix &matrix,
                         }
                     }
                 }
+        //Then we run through the states on the second layer
+        for (int pos1 = ham.mrange; pos1 < ham.norb; pos1++) if (it.cstate[pos1])
+            for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2])
+                if (pos2 != pos1)
+                {
+                    Orbital totalprop = orblist[pos1] + orblist[pos2];
+                    vector<OrbPair> possible_pairs = pairlist2[totalprop];
+                    for (auto it2 : possible_pairs)
+                    {
+                        int new1 = orb_idlist[it2.orb1];
+                        int new2 = orb_idlist[it2.orb2];
+                        CompactState tempcstate = it.cstate;
+                        tempcstate[pos1] = 0;
+                        tempcstate[pos2] = 0;
+
+                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                        {
+                            if (it2.orb1.layer == it2.orb2.layer)
+                            {
+                                CompactState tempcstate(it.cstate);
+
+                                int sign_counter = 0;
+
+                                //applying the operators
+                                for (int i = ham.mrange; i < pos1; i++) if (tempcstate[i]) sign_counter++;
+                                tempcstate[pos1] = 0;
+                                for (int i = ham.mrange; i < pos2; i++) if (tempcstate[i]) sign_counter++;
+                                tempcstate[pos2] = 0;
+                                for (int i = ham.mrange; i < new2; i++) if (tempcstate[i]) sign_counter++;
+                                tempcstate[new2] = 1;
+                                for (int i = ham.mrange; i < new1; i++) if (tempcstate[i]) sign_counter++;
+                                tempcstate[new1] = 1;
+
+                                int newid = reference_list[tempcstate.to_ullong()];
+
+                                if (newid == 0)
+                                {
+                                    cout << "State reference Error: ket state not found while building \
+                                        interaction matrix term samespin1." <<endl;
+
+                                    cout<<"from:\t"<<it.cstate<<endl;
+                                    cout<<"to:\t"<<tempcstate<<endl<<endl;
+                                    abort();
+                                }
+                                //all these junks of MatEle here can be deleted after debugging
+                                MatEle mat_ele;
+                                mat_ele.bra = it.state_id - StateIdShift;
+                                mat_ele.ket = newid - StateIdShift;
+                                double amplitude = ham.CoulombForm[new1-ham.mrange][new2-ham.mrange][pos1-ham.mrange][pos2-ham.mrange];
+
+                                if (sign_counter % 2 == 0) {
+                                    mat_ele.amplitude = amplitude;
+                                } else {
+                                    mat_ele.amplitude = -amplitude;
+                                }
+
+
+                                if(abs(amplitude)>SmallDouble)
+                                {
+                                    bra_ket temp(it.state_id - StateIdShift, newid - StateIdShift);
+                                    if (sign_counter % 2 == 0)
+                                        matrix[temp] += amplitude;
+                                    else
+                                        matrix[temp] -= amplitude;
+                                }
+
+                            }
+                        }
+                    }
+                }
         count++;
-        if(count %10000 == 0) cout<<"10000 states finished, part 1"<<endl;
+        if(count %10000 == 0) cout<<"10000 states finished"<<endl;
     }
 }
 
@@ -645,7 +737,7 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
 }
 
 
-int run(int norb, int nEle, double t, int lanczosNE)
+int run(int norb, int nEle, double a, double t, int lanczosNE)
 {
     cout<<"Fractional Quantum Hall System on Torus"<<endl;
     cout<<"Norb = "<<norb<<"\nn_electron= "<<nEle<<"\nt"<<t<<endl;
@@ -654,7 +746,10 @@ int run(int norb, int nEle, double t, int lanczosNE)
     ham.nele = nEle;
     ham.lanczosNE=lanczosNE;
     ham.norb = norb;
+    ham.mrange = norb/2;
     ham.t=t;
+    ham.a = a;
+    ham.b = pi * ham.norb / a;
 
     vector<Orbital> orblist=generate_orblist();
 
@@ -663,7 +758,9 @@ int run(int norb, int nEle, double t, int lanczosNE)
         cout<<"Error: Too many orbitals. Raise MaxOrbital"<<endl;
         return 1;
     }
+
     compute_Coulomb_Forms(orblist);
+
     //maps from orbital to orbital id //OK
     OrbMap orb_idlist = generate_orb_idlist(orblist);
 
@@ -672,6 +769,22 @@ int run(int norb, int nEle, double t, int lanczosNE)
     PairGroup pairlist1 = generate_pair_list(orblist, 1);
     PairGroup pairlist2 = generate_pair_list(orblist, 2);
 
+    for (auto it : pairlist1)
+    {
+        cout << it.first<<endl;
+        for (auto it2 : it.second)
+            cout<<it2<<endl;
+        cout<<endl;
+    }
+    cout<<"================================================"<<endl;
+    for (auto it : pairlist2)
+    {
+        cout << it.first<<endl;
+        for (auto it2 : it.second)
+            cout<<it2<<endl;
+        cout<<endl;
+    }
+    cout<<"================================================"<<endl;
     //generate the list of states and classify them by momentum
     //"generation of the Hilbert space"
     cStateMap statelist;
@@ -721,22 +834,26 @@ int run(int norb, int nEle, double t, int lanczosNE)
     }
 
     cout<<"Here is the diagonalization result: "<<endl;
-
+    ofstream printresult;
+    printresult.open("printresult.txt");
     for(auto it : results)
     {
-        for (auto& it2 : it.eigenvalues){
+        for (auto& it2 : it.eigenvalues)
+        {
             cout<<it.sector_indicator<<" ";
             if(abs(it2)<SmallDouble) cout<<" E = 0"<<endl;
             else cout<<" E = "<<it2<<endl;
+            
+            printresult<<it.sector_indicator<<" ";
+            if(abs(it2)<SmallDouble) printresult<<" E = 0"<<endl;
+            else printresult<<" E = "<<it2<<endl;
         }
     }
-
-    cout<<"Eigenvalues: "<<results[0].eigenvalues[0]<<", "<<results[0].eigenvalues[1]<<", "<<results[0].eigenvalues[2]<<", "<<results[0].eigenvalues[3]<<endl;
 
     return 0;
 }
 
 int main()
 {
-    run(30, 10, 0, 10);
+    run(18, 6, 3, 0, 10);
 }
