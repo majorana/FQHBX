@@ -446,13 +446,12 @@ void decorate_state(vector<CompactState> &cstates, vector<State> &dec_states,\
 void build_hopping_mat(Matrix &matrix, vector<State> &states,\
         ReferenceMap &reference_list, vector<Orbital>& orblist)
 {
-    int mrange=ham.norb/2;
     MatEle mat_ele;
     for (auto it : states)
     {
-        for (int i = 0; i < mrange; i ++)
+        for (int i = 0; i < ham.mrange; i ++)
         {
-            if (it.cstate[i] != it.cstate[i + mrange])
+            if (it.cstate[i] != it.cstate[i + ham.mrange])
             {
                 CompactState temp_cstate(it.cstate);
                 int sign_counter = 0;
@@ -460,13 +459,13 @@ void build_hopping_mat(Matrix &matrix, vector<State> &states,\
                 {
                     for (int j = 0; j < i; j++) if (temp_cstate[j]) sign_counter++;
                     temp_cstate[i] = 0;
-                    for (int j = 0; j < i + mrange; j++) if (temp_cstate[j]) sign_counter++;
-                    temp_cstate[i + mrange] = 1;
+                    for (int j = 0; j < i + ham.mrange; j++) if (temp_cstate[j]) sign_counter++;
+                    temp_cstate[i + ham.mrange] = 1;
                 }
                 else
                 {
-                    for (int j = 0; j < i + mrange; j++) if (temp_cstate[j]) sign_counter++;
-                    temp_cstate[i + mrange] = 0;
+                    for (int j = 0; j < i + ham.mrange; j++) if (temp_cstate[j]) sign_counter++;
+                    temp_cstate[i + ham.mrange] = 0;
                     for (int j = 0; j < i; j++) if (temp_cstate[j]) sign_counter++;
                     temp_cstate[i] = 1;
                 }
@@ -569,7 +568,7 @@ void build_Interaction_mat(Matrix &matrix,
                                 }
 
 
-                                if(abs(real(amplitude))>SmallDouble || abs(imag(amplitude))>SmallDouble)
+                                if(abs(amplitude)>SmallDouble)
                                 {
                                     bra_ket temp(it.state_id - StateIdShift, newid - StateIdShift);
                                     if (sign_counter % 2 == 0)
@@ -812,7 +811,7 @@ int run(int norb, int nEle, double a, double t, int lanczosNE)
         decorate_state(it.second, states, reference_list);
 
         //build the matrix of kinetic part
-        build_hopping_mat(matrix, states, reference_list, orblist);
+//        build_hopping_mat(matrix, states, reference_list, orblist);
         cout<<"Finished the hopping matrix"<<endl;
         build_Interaction_mat(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
         cout<<"Finished the interaction matrix"<<endl;

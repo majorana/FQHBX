@@ -1,4 +1,6 @@
-all: 1
+all: 2
+2:
+	 icc -std=c++11 -O3 -o FQH2Lnew FQH2Lnew.cpp -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -llanczos -lgfortran -lpthread
 
 0:
 	 icc -std=c++11 -O3 -o FQH2L FQH2L.cpp -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -llanczos -lgfortran -lpthread

@@ -277,6 +277,7 @@ vector<Orbital> generate_orblist()
 //m1-m3=k, m1-m4=m
 double V(int k, int m, double a, double b, int Ns)
 {
+    cout<<"The calling parameters: "<<k<<" "<<m<<" "<<a<<" "<<b<<" "<<Ns<<" "<<endl;
     int cutoff = 50;
     double v = 0;
 
