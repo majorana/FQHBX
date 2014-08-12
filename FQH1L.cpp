@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
 //                                                                            //
-//                            FQH_2_Layers  version 1.00                      //
+//                            FQH_1_Layer  version 2.00                       //
 //                                                                            //
 //                        Copyright (C) 2012-2014 Bin Xu                      //
 //                                                                            //
@@ -12,8 +12,10 @@
 //                                                                            //
 //    V1.0 (09/08/2014): A completed version that studies the projected       //
 //    Coulomb interaction with interlayer hopping terms. It is still buggy.   //
+//    V2.0 (12/08/2014): 3 fold degeneracy observed. Code not totally verified//
 //                                                                            //
-//                        last modification : 09/08/2014                      //
+//                                                                            //
+//                        last modification : 12/08/2014                      //
 //                                                                            //
 //    This program is free software; you can redistribute it and/or modify    //
 //    it under the terms of the GNU General Public License as published by    //
@@ -285,7 +287,7 @@ double V(int k, int m, double a, double b, int Ns)
         for (int nm = -cutoff; nm <= cutoff; nm++) 
         {
             double q2 = m + nm*Ns;
-            double qx = 2 * pi * q1/a - 2 * pi * q2/b;
+            double qx = 2 * pi * q1/a;
             double qy = 2 * pi * q2/b;
             double q = sqrt(qx * qx + qy * qy);
             if (q != 0)

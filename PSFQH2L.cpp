@@ -290,7 +290,7 @@ double V(int k, int m, double a, double b, int Ns)
         for (int nm = -cutoff; nm <= cutoff; nm++) 
         {
             double q2 = m + nm*Ns;
-            double qx = 2 * pi * q1/a - 2 * pi * q2/b;
+            double qx = 2 * pi * q1/a;
             double qy = 2 * pi * q2/b;
             double q = sqrt(qx * qx + qy * qy);
             v += 1.0*(1-q*q) * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
