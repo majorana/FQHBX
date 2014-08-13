@@ -292,7 +292,7 @@ double V(int k, int m, double a, double b, int Ns)
             double q2 = m + nm*Ns;
             double qx = 2 * pi * q1/a;
             double qy = 2 * pi * q2/b;
-            double q = sqrt(qx * qx + qy * qy);
+            double q = sqrt(qx * qx + qy * qy+0.0001);
             if (q != 0)
                 v += 1.0/q * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
             else
