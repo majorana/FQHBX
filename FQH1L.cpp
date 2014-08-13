@@ -45,7 +45,7 @@
 #include <bitset>
 #include <algorithm>
 
-#include <lanczosdiag.h>
+#include <lanczos.h>
 
 using namespace std;
 #include "mkl_lapacke.h"
@@ -289,11 +289,7 @@ double Vco(int k, int m, double a, double b, int Ns)
             double q2 = m + nm*Ns;
             double qx = 2 * pi * q1/a;
             double qy = 2 * pi * q2/b;
-<<<<<<< HEAD
             double q = sqrt(qx * qx + qy * qy + SmallMomentum);
-=======
-            double q = sqrt(qx * qx + qy * qy + 0.0001);
->>>>>>> FETCH_HEAD
             if (q != 0)
                 v += 1.0/q * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
             else
@@ -305,7 +301,6 @@ double Vco(int k, int m, double a, double b, int Ns)
 //m1-m3=k, m1-m4=m
 double Vps(int k, int m, double a, double b, int Ns)
 {
-    cout<<"The calling parameters: "<<k<<" "<<m<<" "<<a<<" "<<b<<" "<<Ns<<" "<<endl;
     int cutoff = 50;
     double v = 0;
     
@@ -748,6 +743,7 @@ int run(int norb, int nEle, double a, double t, int lanczosNE, char interaction)
             if(abs(it2)<SmallDouble) cout<<" E = 0"<<endl;
             else cout<<" E = "<<it2<<endl;
         }
+    cout<<"================================================"<<endl;
         for (auto& it2 : it.eigenvalues)
         {
             printresult<<it.sector_indicator<<" ";
