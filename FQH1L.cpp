@@ -44,11 +44,11 @@
 #include <unordered_map>
 #include <bitset>
 #include <algorithm>
-#include <lanczos.h>
+
+#include <lanczosdiag.h>
 
 using namespace std;
 #include "mkl_lapacke.h"
-
 const double pi = 3.14159;
 
 const int MaxOrbital = 40;
@@ -59,7 +59,7 @@ const int MaxLapackSize = 5000;
 
 const double SmallDouble = 0.000000001;
 
-const double Tiny = 0.001;
+const double SmallMomentum = 0.0001;
 
 ////////////////////////////////////////////////////////////////////////////////
 //Structual structures
@@ -70,6 +70,7 @@ struct Hamiltonian
     int lanczosNE;
     double t, a, b;
     double CoulombForm[MaxOrbital][MaxOrbital][MaxOrbital][MaxOrbital];
+    char interaction;
 };
 
 Hamiltonian ham; //The global object that provides all complicated parameters
@@ -277,9 +278,8 @@ vector<Orbital> generate_orblist()
     return orblist;
 }
 //m1-m3=k, m1-m4=m
-double V(int k, int m, double a, double b, int Ns)
+double Vco(int k, int m, double a, double b, int Ns)
 {
-    cout<<"The calling parameters: "<<k<<" "<<m<<" "<<a<<" "<<b<<" "<<Ns<<" "<<endl;
     int cutoff = 50;
     double v = 0;
 
@@ -289,11 +289,34 @@ double V(int k, int m, double a, double b, int Ns)
             double q2 = m + nm*Ns;
             double qx = 2 * pi * q1/a;
             double qy = 2 * pi * q2/b;
+<<<<<<< HEAD
+            double q = sqrt(qx * qx + qy * qy + SmallMomentum);
+=======
             double q = sqrt(qx * qx + qy * qy + 0.0001);
+>>>>>>> FETCH_HEAD
             if (q != 0)
                 v += 1.0/q * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
             else
                 cout<<"q = 0"<<endl;
+        }
+    return v/Ns;
+}
+
+//m1-m3=k, m1-m4=m
+double Vps(int k, int m, double a, double b, int Ns)
+{
+    cout<<"The calling parameters: "<<k<<" "<<m<<" "<<a<<" "<<b<<" "<<Ns<<" "<<endl;
+    int cutoff = 50;
+    double v = 0;
+    
+    for (int q1 = -cutoff; q1 <= cutoff; q1++)
+        for (int nm = -cutoff; nm <= cutoff; nm++)
+        {
+            double q2 = m + nm*Ns;
+            double qx = 2 * pi * q1/a;
+            double qy = 2 * pi * q2/b;
+            double q = sqrt(qx * qx + qy * qy);
+            v += 1.0*(1-q*q) * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
         }
     return v/Ns;
 }
@@ -306,8 +329,11 @@ void compute_Coulomb_Forms(vector<Orbital> orblist)
         {
             if ((n1+n2)%ham.mrange == (n3+n4)%ham.mrange )
             {
-                ham.CoulombForm[n1][n2][n3][n4] = V(n1-n3, n1-n4, ham.a, ham.b, mrange);
-                cout<<n1<<","<<n2<<","<<n3<<","<<n4<<" = "<< ham.CoulombForm[n1][n2][n3][n4]<<endl;
+                if (ham.interaction == 'c')
+                    ham.CoulombForm[n1][n2][n3][n4] = Vco(n1-n3, n1-n4, ham.a, ham.b, mrange);
+                else if (ham.interaction == 'p')
+                    ham.CoulombForm[n1][n2][n3][n4] = Vps(n1-n3, n1-n4, ham.a, ham.b, mrange);
+              //  cout<<n1<<","<<n2<<","<<n3<<","<<n4<<" = "<< ham.CoulombForm[n1][n2][n3][n4]<<endl;
             }
             else
                 ham.CoulombForm[n1][n2][n3][n4] = 0;
@@ -538,44 +564,44 @@ void build_Interaction_mat(Matrix &matrix,
 diag_return lapack_diagonalize(Matrix & matrix, const int & size)
 {
     double *H = new double[size * size];
-
+    
     for (int i = 0; i < size*size; i++)
         H[i] = 0;
-
+    
     for (auto it : matrix)
     {
         H[it.first.bra*size+it.first.ket] += it.second;
     }
-
+    
     double *Evals = new double[size];
-
+    
     int info;
-
+    
     info = LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'L', size, H, size, Evals);
-
+    
     if (info > 0) {
         cout << "Error in Lapack while computing eigenvalues." <<endl;
     }
-
+    
     diag_return returnvalue;
     for (int i = 0; i < size; i++) {
         returnvalue.eigenvalues.push_back(Evals[i]);
     }
     sort(returnvalue.eigenvalues.begin(), returnvalue.eigenvalues.end(),
-            [](const double & a, const double & b) -> bool
-            {return a< b; });
-
+         [](const double & a, const double & b) -> bool
+         {return a< b; });
+    
     delete Evals;
-
+    
     delete[] H;
-
+    
     return returnvalue;
 }
 
 int *fast_bra_list;
 int *fast_ket_list;
 double *fast_amp_list;
-int fast_size;
+size_t fast_size;
 
 void matvec(int *size, double *vec_in, double *vec_out, bool *add)
 {
@@ -587,7 +613,7 @@ void matvec(int *size, double *vec_in, double *vec_out, bool *add)
         vec_out[fast_ket_list[i]] += fast_amp_list[i] * vec_in[fast_bra_list[i]];
 }
 
-diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
+diag_return lanczos_diagonalize(Matrix & matrix, size_t size, int nevals)
 {
     fast_size = matrix.size();
     fast_bra_list = new int [fast_size];
@@ -607,16 +633,17 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
 
     vector<double> variance;
 
-    lanczos_diag(size, nevals, matvec, returnvalue.eigenvalues, variance);
+    lanczos_diag((int)size, nevals, matvec, returnvalue.eigenvalues, variance);
 
     delete [] fast_bra_list;
     delete [] fast_ket_list;
     delete [] fast_amp_list;
+    abort();
     return returnvalue;
 }
 
 
-int run(int norb, int nEle, double a, double t, int lanczosNE)
+int run(int norb, int nEle, double a, double t, int lanczosNE, char interaction)
 {
     cout<<"Fractional Quantum Hall System on Torus"<<endl;
     cout<<"Norb = "<<norb<<"\nn_electron= "<<nEle<<"\nt"<<t<<endl;
@@ -629,7 +656,7 @@ int run(int norb, int nEle, double a, double t, int lanczosNE)
     ham.t=t;
     ham.a = a;
     ham.b = 2*pi * ham.norb / a;
-
+    ham.interaction = interaction;
     vector<Orbital> orblist=generate_orblist();
     for (auto it : orblist) cout<<it<<endl;
     if (ham.norb>MaxOrbital)
@@ -679,13 +706,11 @@ int run(int norb, int nEle, double a, double t, int lanczosNE)
         ReferenceMap reference_list;
 
         decorate_state(it.second, states, reference_list);
-        for (auto it : states) cout<<it<<endl;        
         //build the matrix of kinetic part
         build_hopping_mat(matrix, states, reference_list, orblist);
         cout<<"Finished the hopping matrix"<<endl;
         build_Interaction_mat(matrix, states, reference_list, pairlist1, orblist, orb_idlist);
         cout<<"Finished the interaction matrix"<<endl;
-        for (auto it : matrix) cout<<"<"<<it.first.bra<<"|H|"<<it.first.ket<<"> = "<<it.second<<endl;
         if(it.second.size()<MaxLapackSize)
         {
             cout<<"Using lapack"<<endl;
@@ -707,28 +732,39 @@ int run(int norb, int nEle, double a, double t, int lanczosNE)
     cout<<"Here is the diagonalization result: "<<endl;
     ofstream printresult;
     printresult.open("printresult.txt");
+    
     for(auto it : results)
     {
+        int evcount = ham.lanczosNE;
+        bool short_output_mode = (evcount > 0);
         for (auto& it2 : it.eigenvalues)
         {
+            if (short_output_mode) {
+                evcount--;
+                if (evcount < 0)
+                    break;
+            }
             cout<<it.sector_indicator<<" ";
             if(abs(it2)<SmallDouble) cout<<" E = 0"<<endl;
             else cout<<" E = "<<it2<<endl;
-
+        }
+        for (auto& it2 : it.eigenvalues)
+        {
             printresult<<it.sector_indicator<<" ";
             if(abs(it2)<SmallDouble) printresult<<" E = 0"<<endl;
             else printresult<<" E = "<<it2<<endl;
         }
+        
     }
     return 0;
 }
 
 int main()
 {
-    int norb, nele;
+    int norb, nele, nEv;
     double a;
-    cout <<"norb, nele, a"<<endl;
-    cin>>norb>>nele>>a;
-    run(norb, nele, a, 10, 10);
-//    cout<<V(1, 0, 6.14, 6.14, 6)<<endl;
+    char interaction;
+    cout <<"norb, nele, a, nEv, interaction(c for Coulomb, p for pseudopotential)"<<endl;
+    cin>>norb>>nele>>a>>nEv>>interaction;
+    run(norb, nele, a, 10, nEv, interaction);
 }
