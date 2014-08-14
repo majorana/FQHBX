@@ -899,9 +899,9 @@ int run(int norb, int nEle, double a, double t, int lanczosNE, char interaction)
 int main()
 {
     int norb, nele, nEv;
-    double a;
+    double a, t;
     char interaction;
-    cout <<"norb, nele, a, nEv, interaction(c for Coulomb, p for pseudopotential)"<<endl;
-    cin>>norb>>nele>>a>>nEv>>interaction;
-    run(norb, nele, a, 10, nEv, interaction);
+    cout <<"norb, nele, a, t, nEv, interaction(c for Coulomb, p for pseudopotential)"<<endl;
+    cin>>norb>>nele>>a>>t>>nEv>>interaction;
+    run(norb, nele, a, t, nEv, interaction);
 }
