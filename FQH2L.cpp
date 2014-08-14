@@ -472,14 +472,59 @@ void decorate_state(vector<CompactState> &cstates, vector<State> &dec_states,\
     }
 }
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
-// Generate matrix elements of Dirac term
+// Generate matrix elements of interlayer hopping term
 ////////////////////////////////////////////////////////////////////////////////
 void build_hopping_mat(Matrix &matrix, vector<State> &states,\
         ReferenceMap &reference_list, vector<Orbital>& orblist)
 {
+    MatEle mat_ele;
+    for (auto it : states)
+    {
+        for (int i = 0; i < ham.mrange; i ++)
+        {
+            if (it.cstate[i] != it.cstate[i + ham.mrange])
+            {
+                CompactState temp_cstate(it.cstate);
+                int sign_counter = 0;
+                if (temp_cstate[i])
+                {
+                    for (int j = 0; j < i; j++) if (temp_cstate[j]) sign_counter++;
+                    temp_cstate[i] = 0;
+                    for (int j = 0; j < i + ham.mrange; j++) if (temp_cstate[j]) sign_counter++;
+                    temp_cstate[i + ham.mrange] = 1;
+                }
+                else
+                {
+                    for (int j = 0; j < i + ham.mrange; j++) if (temp_cstate[j]) sign_counter++;
+                    temp_cstate[i + ham.mrange] = 0;
+                    for (int j = 0; j < i; j++) if (temp_cstate[j]) sign_counter++;
+                    temp_cstate[i] = 1;
+                }
+                mat_ele.bra = it.state_id-StateIdShift;
+                mat_ele.ket = reference_list[temp_cstate.to_ullong()];
+                if (mat_ele.ket == 0) {
+                    cout << "State reference error: ket state not found while\
+                    building kinetic terms."<<endl;
+                    abort();
+                }
+                else {
+                    mat_ele.ket -= StateIdShift;
+                }
+                
+                if (sign_counter % 2 == 0)
+                    mat_ele.amplitude = ham.t;
+                else
+                    mat_ele.amplitude = -ham.t;
+                
+                if(abs(mat_ele.amplitude)>SmallDouble)
+                {
+                    bra_ket temp(mat_ele.bra, mat_ele.ket);
+                    matrix[temp] += mat_ele.amplitude;
+                }
+            }
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
