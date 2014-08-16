@@ -587,7 +587,7 @@ int build_Interaction_mat_dryrun(Matrix &matrix,
                 }
         
         count++;
-        if(count %10000 == 0) cout<<"test run: 10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl<<mat_ele_count<<" matrix elements in total now";
+        if(count %10000 == 0) cout<<"test run: 10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl<<mat_ele_count<<" matrix elements in total now"<<endl;
     }
     return mat_ele_count;
 }
