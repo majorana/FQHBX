@@ -48,9 +48,9 @@
 #include <unordered_map>
 #include <bitset>
 #include <algorithm>
-//BIN#include <lanczos.h>
+#include <lanczos.h>
 using namespace std;
-//BIN#include "mkl_lapacke.h"
+#include "mkl_lapacke.h"
 const double pi = 3.14159;
 
 const int MaxOrbital = 40;
@@ -152,25 +152,6 @@ struct MatEle
 };
 
 typedef vector<MatEle> Matrix;
-
-struct bra_ket
-{
-    int bra, ket;
-    bra_ket(){bra = 0; ket = 0;}
-    bra_ket(int o_bra, int o_ket){bra=o_bra, ket = o_ket; }
-    bool operator== (const bra_ket &rhs) const
-    {
-        return (bra == rhs.bra && ket == rhs.ket);
-    }
-};
-
-struct bra_ket_hasher
-{
-    size_t operator()(const bra_ket & bk) const
-    {
-        return (hash<int>()(bk.bra) ^ (hash<int>()(bk.ket) <<1));
-    }
-};
 
 typedef unordered_map<int, double> DupMatrix;
 //DupMatrix.first = ket, DupMatrix.second = amplitude, bra is implicit
@@ -856,7 +837,7 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     
     vector<double> variance;
     
-//BIN    lanczos_diag(size, nevals, matvec, returnvalue.eigenvalues, variance);
+    lanczos_diag(size, nevals, matvec, returnvalue.eigenvalues, variance);
     for (int i = 0; i < size; i++)
     {
         delete [] fast_amp_list[i];
