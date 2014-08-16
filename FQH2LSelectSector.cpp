@@ -681,7 +681,7 @@ void build_Interaction_mat(Matrix &matrix,
                                 mat_ele.bra = it.state_id - StateIdShift;
                                 mat_ele.ket = newid - StateIdShift;
                                 double amplitude = ham.CoulombForm[new1][new2][pos2][pos1];
-                                mat_ele.amplitude
+
                                 if (sign_counter % 2 == 0) {
                                     mat_ele.amplitude = amplitude;
                                 } else {
