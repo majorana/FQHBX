@@ -14,6 +14,22 @@
 //    Coulomb interaction with interlayer hopping terms. It is still buggy.   //
 //    V2.0 (16/08/2014): A totally finished version. This specific program    //
 //    is designed for large systems in which only one sector will be stored.  //
+//    -- This does not work due to the hugh number of matrix elements.        //
+//    -- Possible solution 1: use translational symmetry to greatly reduce    //
+//       the number of matrix elements.                                       //
+//       Pro: fast, nearly no additional cost                                 //
+//       Con: the symmetry is not guarenteed                                  //
+//    -- Possible solution 2: compute the matrix elements on the fly, or at   //
+//       least partially on the fly.                                          //
+//       Pro: saves memory, and it's a more common practice                   //
+//       Con: it takes long time to calculate the matrix again and again      //
+//    -- Possible solution 3: Use scalapack to run full MPI code.             //
+//       Pro: industrially mature                                             //
+//       Con: you've got to give me lots of free nodes!!                      //
+//    -- Possible solution 4: Store matrix elements on the disk               //
+//       Pro: saves cpu                                                       //
+//       Con: it takes long time to read from disks                           //
+//                                                                            //
 //                        last modification : 16/08/2014                      //
 //                                                                            //
 //    This program is free software; you can redistribute it and/or modify    //
