@@ -30,9 +30,11 @@
 //       Pro: saves cpu                                                       //
 //       Con: it takes long time to read from disks                           //
 //                                                                            //
-//    WARNING: many variables need to be written in type llong rather than    //
-//    int in this case. We are indeed touching the boundary of programming    //
-//    limits...                                                               //
+//    WARNING: variables related to the matrix elements need to be written in //
+//    type llong rather than int in this case. We are indeed touching the     //
+//    boundary of programming limits... But Haldane's Lanczos is still OK as  //
+//    it only deals with the vector which is smaller than the maximum size    //
+//    of an integer.                                                          //
 //                                                                            //
 //                        last modification : 16/08/2014                      //
 //                                                                            //
@@ -929,6 +931,12 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
         cout<<"Finished the hopping matrix"<<endl;
         ham.matrixsize = build_Interaction_mat_dryrun(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
         build_Interaction_mat(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
+    ofstream matele;
+    matele.open("matele.txt");
+    for (auto matit : matrix) {
+        matele<<matit<<endl;
+    }
+    matele.close();
         cout<<"Finished the interaction matrix"<<endl;
         if(states.size()<MaxLapackSize)
         {
