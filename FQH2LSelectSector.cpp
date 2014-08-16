@@ -455,10 +455,10 @@ void generate_state_list(vector<Orbital>& orblist, vector<State> &dec_states, Re
         State temp(cstate);
         temp.state_id = stateid;
         dec_states.push_back(temp);
-        refMap[cstates[i].to_ullong()] = stateid;
+        refMap[cstate.to_ullong()] = stateid;
         stateid++;
     }
-    statelist[m].push_back(cstate);
+
     while (cs_nothighest(cstate))
     {
         cs_plusplus(cstate);
@@ -468,7 +468,7 @@ void generate_state_list(vector<Orbital>& orblist, vector<State> &dec_states, Re
             State temp(cstate);
             temp.state_id = stateid;
             dec_states.push_back(temp);
-            refMap[cstates[i].to_ullong()] = stateid;
+            refMap[cstate.to_ullong()] = stateid;
             stateid++;
         }
     }
@@ -824,7 +824,7 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
     cout<<"================================================"<<endl;
     //generate the list of states with a specific momentum
     //"generation of the LOCAL Hilbert space"
-    vector<State> dec_states;
+    vector<State> states;
     ReferenceMap reference_list;
     generate_state_list(orblist, states, reference_list);
 
@@ -845,7 +845,7 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
         cout<<"Finished the hopping matrix"<<endl;
         build_Interaction_mat(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
         cout<<"Finished the interaction matrix"<<endl;
-        if(it.second.size()<MaxLapackSize)
+        if(states.size()<MaxLapackSize)
         {
             cout<<"Using lapack"<<endl;
             diag_return diag_result=lapack_diagonalize(matrix, states.size());
