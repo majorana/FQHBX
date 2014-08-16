@@ -80,6 +80,7 @@ const double SmallDouble = 0.000000001;
 
 const double SmallMomentum = 0.0001;
 
+ofstream matele;
 ////////////////////////////////////////////////////////////////////////////////
 //Structual structures
 ////////////////////////////////////////////////////////////////////////////////
@@ -860,7 +861,7 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     return returnvalue;
 }
 
-ofstream matele;
+
 
 int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char interaction)
 {
