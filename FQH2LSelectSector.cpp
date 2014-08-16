@@ -857,7 +857,6 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     delete [] fast_bra_list;
     delete [] fast_ket_list;
     delete [] fast_amp_list;
-    abort();
     return returnvalue;
 }
 
