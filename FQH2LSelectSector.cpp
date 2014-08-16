@@ -30,6 +30,10 @@
 //       Pro: saves cpu                                                       //
 //       Con: it takes long time to read from disks                           //
 //                                                                            //
+//    WARNING: many variables need to be written in type llong rather than    //
+//    int in this case. We are indeed touching the boundary of programming    //
+//    limits...                                                               //
+//                                                                            //
 //                        last modification : 16/08/2014                      //
 //                                                                            //
 //    This program is free software; you can redistribute it and/or modify    //
