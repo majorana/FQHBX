@@ -685,7 +685,7 @@ void build_Interaction_mat(Matrix &matrix,
         }
 
         count++;
-        if(count %10000 == 0) cout<<"10000 states finished"<<endl;
+        if(count %10000 == 0) cout<<"10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl;
     }
 }
 
