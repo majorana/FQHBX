@@ -14,27 +14,6 @@
 //    Coulomb interaction with interlayer hopping terms. It is still buggy.   //
 //    V2.0 (16/08/2014): A totally finished version. This specific program    //
 //    is designed for large systems in which only one sector will be stored.  //
-//    -- This does not work due to the hugh number of matrix elements.        //
-//    -- Possible solution 1: use translational symmetry to greatly reduce    //
-//       the number of matrix elements.                                       //
-//       Pro: fast, nearly no additional cost                                 //
-//       Con: the symmetry is not guarenteed                                  //
-//    -- Possible solution 2: compute the matrix elements on the fly, or at   //
-//       least partially on the fly.                                          //
-//       Pro: saves memory, and it's a more common practice                   //
-//       Con: it takes long time to calculate the matrix again and again      //
-//    -- Possible solution 3: Use scalapack to run full MPI code.             //
-//       Pro: industrially mature                                             //
-//       Con: you've got to give me lots of free nodes!!                      //
-//    -- Possible solution 4: Store matrix elements on the disk               //
-//       Pro: saves cpu                                                       //
-//       Con: it takes long time to read from disks                           //
-//                                                                            //
-//    WARNING: variables related to the matrix elements need to be written in //
-//    type llong rather than int in this case. We are indeed touching the     //
-//    boundary of programming limits... But Haldane's Lanczos is still OK as  //
-//    it only deals with the vector which is smaller than the maximum size    //
-//    of an integer.                                                          //
 //    V3.0 (16/08/2014): I realized that the matrix elements are stored with  //
 //    redundancies (symmetric matrix, and anti-symmetrization of matrix       //
 //    entries). By eliminating the redundencies, the matrix can be stored in  //
@@ -69,9 +48,9 @@
 #include <unordered_map>
 #include <bitset>
 #include <algorithm>
-#include <lanczos.h>
+//BIN#include <lanczos.h>
 using namespace std;
-#include "mkl_lapacke.h"
+//BIN#include "mkl_lapacke.h"
 const double pi = 3.14159;
 
 const int MaxOrbital = 40;
@@ -193,8 +172,8 @@ struct bra_ket_hasher
     }
 };
 
-typedef unordered_map<bra_ket, double, bra_ket_hasher > DupMatrix;
-//DupMatrix.first = bra and  ket, DupMatrix.second = amplitude
+typedef unordered_map<int, double> DupMatrix;
+//DupMatrix.first = ket, DupMatrix.second = amplitude, bra is implicit
 
 
 struct diag_return
@@ -241,8 +220,7 @@ ostream& operator<<(ostream& os, OrbPair& pair)
 }
 ostream& operator<<(ostream & os, MatEle & mat_ele)
 {
-    os << "<" << mat_ele.bra << "|H|" << mat_ele.ket << "> = "\
-    << mat_ele.amplitude;
+    os << "<" << mat_ele.bra << "|H|" << mat_ele.ket << "> = "<< mat_ele.amplitude;
     return os;
 }
 
@@ -394,8 +372,7 @@ PairGroup generate_pair_list(vector<Orbital> orblist, char layer)
             {
                 if (id1 != id2)
                 {
-                    thelist[orblist[id1]+orblist[id2]].\
-                    push_back(OrbPair(orblist[id1], orblist[id2]));
+                    thelist[orblist[id1]+orblist[id2]].push_back(OrbPair(orblist[id1], orblist[id2]));
                 }
             }
     }
@@ -406,8 +383,7 @@ PairGroup generate_pair_list(vector<Orbital> orblist, char layer)
             {
                 if (id1 != id2)
                 {
-                    thelist[orblist[id1]+orblist[id2]].\
-                    push_back(OrbPair(orblist[id1], orblist[id2]));
+                    thelist[orblist[id1]+orblist[id2]].push_back(OrbPair(orblist[id1], orblist[id2]));
                 }
             }
     }
@@ -506,17 +482,118 @@ void generate_state_list(vector<Orbital>& orblist, vector<State> &dec_states, Re
 ////////////////////////////////////////////////////////////////////////////////
 // Generate matrix elements of interlayer hopping term
 ////////////////////////////////////////////////////////////////////////////////
-int *fast_bra_list;
-int *fast_ket_list;
-double *fast_amp_list;
-long long int fast_size;
-long long int fast_count;
+// the column of each matrix element fast_ket_list[row][i] = column of [row][i]th matrix element
+int **fast_ket_list;
+// the amplitude, fast_amp_list[row][i] = amplitude of [row][i]th matrix element
+double **fast_amp_list;
+// the size of each row
+int *fast_size;
+// the running count of the matrix elements of each row/the position to fill in the next mat ele
+int *fast_count;
+//////////////////////////////////////////////////////////////////////////////////////////
+// A dry run of Interacting Matrix Elements to count the number of nonzero matrix elements
+//////////////////////////////////////////////////////////////////////////////////////////
+void build_hopping_mat_dryrun(vector<State> &states, ReferenceMap &reference_list, vector<Orbital>& orblist)
+{
+    fast_size = new int [states.size()];
+    fast_count = new int [states.size()];
+    for (int i = 0; i < states.size(); i++)
+    {
+        fast_size[i] = 0;
+        fast_count[i] = 0;
+    }
+    MatEle mat_ele;
+    for (auto it : states)
+    {
+        for (int i = 0; i < ham.mrange; i ++)
+            if (it.cstate[i] != it.cstate[i + ham.mrange])
+            {
+                CompactState temp_cstate(it.cstate);
+                if (temp_cstate[i])
+                {
+                    temp_cstate[i] = 0;
+                    temp_cstate[i + ham.mrange] = 1;
+                }
+                else
+                {
+                    temp_cstate[i + ham.mrange] = 0;
+                    temp_cstate[i] = 1;
+                }
+                mat_ele.bra = it.state_id-StateIdShift;
+                mat_ele.ket = reference_list[temp_cstate.to_ullong()];
+                fast_size[mat_ele.bra] ++;
+            }
+    }
+}
+void build_Interaction_mat_dryrun(vector<State> states,
+                                  ReferenceMap &reference_list,
+                                  PairGroup &pairlist1,
+                                  PairGroup &pairlist2,
+                                  vector<Orbital> &orblist,
+                                  OrbMap &orb_idlist)
+{
+    int count = 0;
+    for (auto it : states)
+    {
+        int one_state_mat_ele_count = 0;
+        //Then we run through the orbitals on the first layer
+        for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
+            for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2])
+                if (pos2 != pos1)
+                {
+                    Orbital totalprop = orblist[pos1] + orblist[pos2];
+                    vector<OrbPair> possible_pairs = pairlist1[totalprop];
+                    for (auto it2 : possible_pairs)
+                    {
+                        int new1 = orb_idlist[it2.orb1];
+                        int new2 = orb_idlist[it2.orb2];
+                        CompactState tempcstate = it.cstate;
+                        tempcstate[pos1] = 0;
+                        tempcstate[pos2] = 0;
+                        
+                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                            if(abs(ham.CoulombForm[new1][new2][pos2][pos1])>SmallDouble)
+                                one_state_mat_ele_count++;
+                    }
+                }
+        //Then we run through the orbitals on the second layer
+        for (int pos1 = ham.mrange; pos1 < ham.norb; pos1++) if (it.cstate[pos1])
+            for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2])
+                if (pos2 != pos1)
+                {
+                    Orbital totalprop = orblist[pos1] + orblist[pos2];
+                    vector<OrbPair> possible_pairs = pairlist2[totalprop];
+                    for (auto it2 : possible_pairs)
+                    {
+                        int new1 = orb_idlist[it2.orb1];
+                        int new2 = orb_idlist[it2.orb2];
+                        CompactState tempcstate = it.cstate;
+                        tempcstate[pos1] = 0;
+                        tempcstate[pos2] = 0;
+                        
+                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                            if(abs(ham.CoulombForm[new1-ham.mrange][new2-ham.mrange][pos2-ham.mrange][pos1-ham.mrange])>SmallDouble)
+                                one_state_mat_ele_count++;
+                    }
+                }
+        
+        count++;
+        if(count %10000 == 0) cout<<"dry run: 10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl;
+        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count/4);
+        if(count %10000 == 0) cout<<"The number of matrix elements for this state is: "<<fast_size[it.state_id-StateIdShift]<<endl;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Generate Hopping Matrix Elements
+////////////////////////////////////////////////////////////////////////////////
 void build_hopping_mat(vector<State> &states, ReferenceMap &reference_list, vector<Orbital>& orblist)
 {
     MatEle mat_ele;
-    Matrix matrix;
     for (auto it : states)
     {
+        Matrix matrix;
         for (int i = 0; i < ham.mrange; i ++)
         {
             if (it.cstate[i] != it.cstate[i + ham.mrange])
@@ -540,8 +617,7 @@ void build_hopping_mat(vector<State> &states, ReferenceMap &reference_list, vect
                 mat_ele.bra = it.state_id-StateIdShift;
                 mat_ele.ket = reference_list[temp_cstate.to_ullong()];
                 if (mat_ele.ket == 0) {
-                    cout << "State reference error: ket state not found while\
-                    building kinetic terms."<<endl;
+                    cout << "State reference error: ket state not found while building kinetic terms."<<endl;
                     abort();
                 }
                 else
@@ -562,87 +638,21 @@ void build_hopping_mat(vector<State> &states, ReferenceMap &reference_list, vect
                 }
             }
         }
+        //Then we need to copy the matrix elements from "matrix" to bra, ket and amplitude lists
+        fast_ket_list[mat_ele.bra] = new int [fast_size[mat_ele.bra]];
+        fast_amp_list[mat_ele.bra] = new double [fast_size[mat_ele.bra]];
+
+        for (auto it : matrix)
+        {
+            fast_ket_list[it.bra][fast_count[it.bra]] = it.ket;
+            fast_amp_list[it.bra][fast_count[it.bra]] = it.amplitude;
+            fast_count[it.bra]++;
+        }
     }
-    //Then we need to copy the matrix elements from "matrix" to bra, ket and amplitude lists
-    fast_size = ham.matrixsize/4 + matrix.size();
-    fast_amp_list = new double [fast_size];
-    fast_bra_list = new int [fast_size];
-    fast_ket_list = new int [fast_size];
-    
-    fast_count = 0;
-    for (auto it : matrix)
-    {
-        fast_amp_list[fast_count] = it.amplitude;
-        fast_bra_list[fast_count] = it.bra;
-        fast_ket_list[fast_count] = it.ket;
-        fast_count ++;
-    }
-    
 }
-//////////////////////////////////////////////////////////////////////////////////////////
-// A dry run of Interacting Matrix Elements to count the number of nonzero matrix elements
-//////////////////////////////////////////////////////////////////////////////////////////
-long long int build_Interaction_mat_dryrun(vector<State> states,
-                                 ReferenceMap &reference_list,
-                                 PairGroup &pairlist1,
-                                 PairGroup &pairlist2,
-                                 vector<Orbital> &orblist,
-                                 OrbMap &orb_idlist)
-{
-    int count = 0;
-    long long int mat_ele_count = 0;
-    for (auto it : states)
-    {
-        //Then we run through the orbitals on the first layer
-        for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
-            for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2])
-                if (pos2 != pos1)
-                {
-                    Orbital totalprop = orblist[pos1] + orblist[pos2];
-                    vector<OrbPair> possible_pairs = pairlist1[totalprop];
-                    for (auto it2 : possible_pairs)
-                    {
-                        int new1 = orb_idlist[it2.orb1];
-                        int new2 = orb_idlist[it2.orb2];
-                        CompactState tempcstate = it.cstate;
-                        tempcstate[pos1] = 0;
-                        tempcstate[pos2] = 0;
-                        
-                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
-                        {
-                            if(abs(ham.CoulombForm[new1][new2][pos2][pos1])>SmallDouble)
-                                mat_ele_count++;
-                        }
-                    }
-                }
-        //Then we run through the orbitals on the second layer
-        for (int pos1 = ham.mrange; pos1 < ham.norb; pos1++) if (it.cstate[pos1])
-            for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2])
-                if (pos2 != pos1)
-                {
-                    Orbital totalprop = orblist[pos1] + orblist[pos2];
-                    vector<OrbPair> possible_pairs = pairlist2[totalprop];
-                    for (auto it2 : possible_pairs)
-                    {
-                        int new1 = orb_idlist[it2.orb1];
-                        int new2 = orb_idlist[it2.orb2];
-                        CompactState tempcstate = it.cstate;
-                        tempcstate[pos1] = 0;
-                        tempcstate[pos2] = 0;
-                        
-                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
-                        {
-                            if(abs(ham.CoulombForm[new1-ham.mrange][new2-ham.mrange][pos2-ham.mrange][pos1-ham.mrange])>SmallDouble)
-                                mat_ele_count++;
-                        }
-                    }
-                }
-        
-        count++;
-        if(count %10000 == 0) cout<<"dry run: 10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl<<mat_ele_count<<" matrix elements in total now"<<endl;
-    }
-    return mat_ele_count;
-}
+
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -698,8 +708,7 @@ void build_Interaction_mat(vector<State> states,
                                 
                                 if (newid == 0)
                                 {
-                                    cout << "State reference Error: ket state not found while building \
-                                    interaction matrix term samespin1." <<endl;
+                                    cout << "State reference Error: ket state not found while building interaction matrix term samespin1." <<endl;
                                     
                                     cout<<"from:\t"<<it.cstate<<endl;
                                     cout<<"to:\t"<<tempcstate<<endl<<endl;
@@ -718,9 +727,8 @@ void build_Interaction_mat(vector<State> states,
                                         mat_ele.amplitude = amplitude;
                                     else
                                         mat_ele.amplitude = -amplitude;
-                                    bra_ket bk(mat_ele.bra, mat_ele.ket);
                                     
-                                    if(abs(amplitude)>SmallDouble) matrix[bk] += mat_ele.amplitude;
+                                    if(abs(amplitude)>SmallDouble) matrix[mat_ele.ket] += mat_ele.amplitude;
                                 }
                                 else if (mat_ele.bra == mat_ele.ket) //diagonal, keep the matrix element/2
                                 {
@@ -730,9 +738,8 @@ void build_Interaction_mat(vector<State> states,
                                         mat_ele.amplitude = amplitude/2;
                                     else
                                         mat_ele.amplitude = -amplitude/2;
-                                    bra_ket bk(mat_ele.bra, mat_ele.ket);
                                     
-                                    if(abs(amplitude)>SmallDouble) matrix[bk] += mat_ele.amplitude;
+                                    if(abs(amplitude)>SmallDouble) matrix[mat_ele.ket] += mat_ele.amplitude;
                                 }
                                 //upper triangle, do not keep
                                 
@@ -777,8 +784,7 @@ void build_Interaction_mat(vector<State> states,
                                 
                                 if (newid == 0)
                                 {
-                                    cout << "State reference Error: ket state not found while building \
-                                    interaction matrix term samespin1." <<endl;
+                                    cout << "State reference Error: ket state not found while building interaction matrix term samespin1." <<endl;
                                     
                                     cout<<"from:\t"<<it.cstate<<endl;
                                     cout<<"to:\t"<<tempcstate<<endl<<endl;
@@ -797,9 +803,7 @@ void build_Interaction_mat(vector<State> states,
                                     else
                                         mat_ele.amplitude = -amplitude;
                                     
-                                    bra_ket bk(mat_ele.bra, mat_ele.ket);
-                                    
-                                    if(abs(amplitude)>SmallDouble) matrix[bk] += mat_ele.amplitude;
+                                    if(abs(amplitude)>SmallDouble) matrix[mat_ele.ket] += mat_ele.amplitude;
                                 }
                                 else if (mat_ele.bra == mat_ele.ket) //diagonal, keep the matrix element/2
                                 {
@@ -810,9 +814,7 @@ void build_Interaction_mat(vector<State> states,
                                     else
                                         mat_ele.amplitude = -amplitude/2;
                                     
-                                    bra_ket bk(mat_ele.bra, mat_ele.ket);
-                                    
-                                    if(abs(amplitude)>SmallDouble) matrix[bk] += mat_ele.amplitude;
+                                    if(abs(amplitude)>SmallDouble) matrix[mat_ele.ket] += mat_ele.amplitude;
                                 }
                                 //upper triangle, do not keep
                                 
@@ -823,12 +825,11 @@ void build_Interaction_mat(vector<State> states,
         
         count++;
         //we need to do something strange with the states here
-        for (auto it : matrix)
+        for (auto itmat : matrix)
         {
-            fast_amp_list[fast_count] = it.second;
-            fast_bra_list[fast_count] = it.first.bra;
-            fast_ket_list[fast_count] = it.first.ket;
-            fast_count ++;
+            fast_amp_list[it.state_id - StateIdShift][fast_count[it.state_id - StateIdShift]] = itmat.second;
+            fast_ket_list[it.state_id - StateIdShift][fast_count[it.state_id - StateIdShift]] = itmat.first;
+            fast_count[it.state_id - StateIdShift] ++;
         }
         
         if(count %10000 == 0) cout<<"10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl;
@@ -841,11 +842,12 @@ void matvec(int *size, double *vec_in, double *vec_out, bool *add)
         for (int i = 0; i < (*size); i++)
             vec_out[i] = 0.0;
     
-    for (long long int i =0; i < fast_size; i++)
-    {
-        vec_out[fast_ket_list[i]] += fast_amp_list[i] * vec_in[fast_bra_list[i]];
-        vec_out[fast_bra_list[i]] += fast_amp_list[i] * vec_in[fast_ket_list[i]];
-    }
+    for (int i = 0; i < (*size); i++) //for different bra's (i is bra)
+        for (int j = 0; j < fast_count[i]; j++) //for different matrix elements with this bra (fast_ket_list[i][j] gives kets, fast_amp_list[i][j] gives amplitudes)
+        {
+            vec_out[fast_ket_list[i][j]] += fast_amp_list[i][j] * vec_in[i];
+            vec_out[i] += fast_amp_list[i][j] * vec_in[fast_ket_list[i][j]];
+        }
 }
 
 diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
@@ -854,11 +856,17 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     
     vector<double> variance;
     
-    lanczos_diag(size, nevals, matvec, returnvalue.eigenvalues, variance);
-    
-    delete [] fast_bra_list;
+//BIN    lanczos_diag(size, nevals, matvec, returnvalue.eigenvalues, variance);
+    for (int i = 0; i < size; i++)
+    {
+        delete [] fast_amp_list[i];
+        delete [] fast_ket_list[i];
+    }
     delete [] fast_ket_list;
     delete [] fast_amp_list;
+    
+    delete [] fast_size;
+    delete [] fast_count;
     
     return returnvalue;
 }
@@ -937,14 +945,14 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
     Matrix matrix;             //the matrix! the most serious thing!
     
     //A dry run first to determine the interaction matrix size
-    ham.matrixsize = build_Interaction_mat_dryrun(states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
+    build_hopping_mat_dryrun(states, reference_list, orblist);
+    build_Interaction_mat_dryrun(states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
     //Then we calculate the hopping matrix first, because it's easier...
     build_hopping_mat(states, reference_list, orblist);
     cout<<"Finished the hopping matrix"<<endl;
-    
     build_Interaction_mat(states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
     cout<<"Finished the interaction matrix"<<endl;
-    
+
     cout<<"Using Haldane's Lanczos"<<endl;
     diag_return diag_result=lanczos_diagonalize(matrix,states.size(), ham.lanczosNE);
     diag_result.sector_indicator=m;
