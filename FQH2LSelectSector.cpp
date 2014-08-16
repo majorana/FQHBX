@@ -69,6 +69,7 @@ struct Hamiltonian
     double CoulombForm[MaxOrbital][MaxOrbital][MaxOrbital][MaxOrbital];
     char interaction;
     int sector;
+    int matrixsize;
 };
 
 Hamiltonian ham; //The global object that provides all complicated parameters
@@ -528,6 +529,69 @@ void build_hopping_mat(Matrix &matrix, vector<State> &states,\
         }
     }
 }
+int build_Interaction_mat_dryrun(Matrix &matrix,
+                           vector<State> states,
+                           ReferenceMap &reference_list,
+                           PairGroup &pairlist1,
+                           PairGroup &pairlist2,
+                           vector<Orbital> &orblist,
+                           OrbMap &orb_idlist)
+{
+    int count = 0;
+    int mat_ele_count = 0;
+    for (auto it : states)
+    {//go through all states in the list of "states"
+        //Then we run through the orbitals on the first layer
+        for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
+            for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2])
+                if (pos2 != pos1)
+                {
+                    Orbital totalprop = orblist[pos1] + orblist[pos2];
+                    vector<OrbPair> possible_pairs = pairlist1[totalprop];
+                    for (auto it2 : possible_pairs)
+                    {
+                        int new1 = orb_idlist[it2.orb1];
+                        int new2 = orb_idlist[it2.orb2];
+                        CompactState tempcstate = it.cstate;
+                        tempcstate[pos1] = 0;
+                        tempcstate[pos2] = 0;
+                        
+                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                        {
+                            if(abs(ham.CoulombForm[new1][new2][pos2][pos1])>SmallDouble)
+                                mat_ele_count++;
+                        }
+                    }
+                }
+        //Then we run through the orbitals on the second layer
+        for (int pos1 = ham.mrange; pos1 < ham.norb; pos1++) if (it.cstate[pos1])
+            for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2])
+                if (pos2 != pos1)
+                {
+                    Orbital totalprop = orblist[pos1] + orblist[pos2];
+                    vector<OrbPair> possible_pairs = pairlist2[totalprop];
+                    for (auto it2 : possible_pairs)
+                    {
+                        int new1 = orb_idlist[it2.orb1];
+                        int new2 = orb_idlist[it2.orb2];
+                        CompactState tempcstate = it.cstate;
+                        tempcstate[pos1] = 0;
+                        tempcstate[pos2] = 0;
+                        
+                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                        {
+                                if(abs(ham.CoulombForm[new1-ham.mrange][new2-ham.mrange][pos2-ham.mrange][pos1-ham.mrange])>SmallDouble)
+                                    mat_ele_count++;
+                        }
+                    }
+                }
+        
+        count++;
+        if(count %10000 == 0) cout<<"test run: 10000 states finished, "<<((double)count)/states.size()*100<<"\% finished"<<endl<<mat_ele_count<<" matrix elements in total now";
+    }
+    return mat_ele_count;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Generate Interacting Matrix Elements
@@ -843,6 +907,7 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
         //build the matrix of kinetic part
         build_hopping_mat(matrix, states, reference_list, orblist);
         cout<<"Finished the hopping matrix"<<endl;
+        ham.matrixsize = build_Interaction_mat_dryrun(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
         build_Interaction_mat(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
         cout<<"Finished the interaction matrix"<<endl;
         if(states.size()<MaxLapackSize)
