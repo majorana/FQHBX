@@ -680,12 +680,14 @@ void build_Interaction_mat(Matrix &matrix,
                                 mat_ele.bra = it.state_id - StateIdShift;
                                 mat_ele.ket = newid - StateIdShift;
                                 double amplitude = ham.CoulombForm[new1][new2][pos2][pos1];
-
+                                mat_ele.amplitude
                                 if (sign_counter % 2 == 0) {
                                     mat_ele.amplitude = amplitude;
                                 } else {
                                     mat_ele.amplitude = -amplitude;
                                 }
+                                mat_ele.amplitude = amplitude;
+                                matele<<mat_ele<<endl;
                                 //printFullMatEle(mat_ele, states);
                                 if(abs(amplitude)>SmallDouble)
                                 {
@@ -755,6 +757,8 @@ void build_Interaction_mat(Matrix &matrix,
                         } else {
                             mat_ele.amplitude = -amplitude;
                         }
+                        mat_ele.amplitude = amplitude;
+                        matele<<mat_ele<<endl;
                         //printFullMatEle(mat_ele, states);
                         if(abs(amplitude)>SmallDouble)
                         {
@@ -856,6 +860,7 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     return returnvalue;
 }
 
+ofstream matele;
 
 int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char interaction)
 {
@@ -930,13 +935,10 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
         build_hopping_mat(matrix, states, reference_list, orblist);
         cout<<"Finished the hopping matrix"<<endl;
         ham.matrixsize = build_Interaction_mat_dryrun(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
-        build_Interaction_mat(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
-    ofstream matele;
     matele.open("matele.txt");
-    for (auto matit : matrix) {
-        matele<<matit<<endl;
-    }
-    matele.close();
+
+        build_Interaction_mat(matrix, states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
+        matele.close();
         cout<<"Finished the interaction matrix"<<endl;
         if(states.size()<MaxLapackSize)
         {
