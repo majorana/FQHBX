@@ -75,6 +75,7 @@ struct Hamiltonian
     char interaction;
     int sector;
     long long int matrixsize;
+    int matrixdimension;
     
 };
 
@@ -477,12 +478,9 @@ int *fast_count;
 void build_hopping_mat_dryrun(vector<State> &states, ReferenceMap &reference_list, vector<Orbital>& orblist)
 {
     fast_size = new int [states.size()];
-    fast_count = new int [states.size()];
     for (int i = 0; i < states.size(); i++)
-    {
         fast_size[i] = 0;
-        fast_count[i] = 0;
-    }
+
     MatEle mat_ele;
     for (auto it : states)
     {
@@ -566,6 +564,21 @@ void build_Interaction_mat_dryrun(vector<State> states,
 }
 
 
+void allocate_memory()
+{
+    fast_count = new int [states.size()];
+    fast_amp_list = new double* [states.size()];
+    fast_ket_list = new int* [states.size()];
+    
+    for (int i = 0; i < ham.matrixsize; i++)
+    {
+        fast_ket_list[i] = new int[fast_size[i]];
+        fast_amp_list[i] = new double[fast_size[i]];
+        fast_count[i] = 0;
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Generate Hopping Matrix Elements
 ////////////////////////////////////////////////////////////////////////////////
@@ -620,9 +633,6 @@ void build_hopping_mat(vector<State> &states, ReferenceMap &reference_list, vect
             }
         }
         //Then we need to copy the matrix elements from "matrix" to bra, ket and amplitude lists
-        fast_ket_list[mat_ele.bra] = new int [fast_size[mat_ele.bra]];
-        fast_amp_list[mat_ele.bra] = new double [fast_size[mat_ele.bra]];
-
         for (auto it : matrix)
         {
             fast_ket_list[it.bra][fast_count[it.bra]] = it.ket;
@@ -817,6 +827,21 @@ void build_Interaction_mat(vector<State> states,
     }
 }
 
+void deallocate_memory()
+{
+    for (int i = 0; i < ham.matrixsize; i++)
+    {
+        delete [] fast_ket_list[i];
+        delete [] fast_amp_list[i];
+    }
+    delete [] fast_size;
+    delete [] fast_count;
+    delete [] fast_amp_list;
+    delete [] fast_ket_list;
+    
+    
+}
+
 void matvec(int *size, double *vec_in, double *vec_out, bool *add)
 {
     if (!(*add))
@@ -912,15 +937,12 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
     vector<State> states;
     ReferenceMap reference_list;
     generate_state_list(orblist, states, reference_list);
-    
+    ham.matrixsize = states.size();
     ////////////////////////////////////////////////////////////////////////////
     //Generate the matrix elements and diagonalize matrices
     //for each momentum sector.
     //This is the most serious job and can be parallelized.
     ////////////////////////////////////////////////////////////////////////////
-    
-    vector<diag_return> results;
-    
     int m = ham.sector;
     cout<<"State Sector: "<<m<<"\t local dimension: "<<states.size()<<endl;
     Matrix matrix;             //the matrix! the most serious thing!
@@ -928,6 +950,9 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
     //A dry run first to determine the interaction matrix size
     build_hopping_mat_dryrun(states, reference_list, orblist);
     build_Interaction_mat_dryrun(states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
+    
+    allocate_memory();
+    
     //Then we calculate the hopping matrix first, because it's easier...
     build_hopping_mat(states, reference_list, orblist);
     cout<<"Finished the hopping matrix"<<endl;
@@ -936,14 +961,16 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
 
     cout<<"Using Haldane's Lanczos"<<endl;
     diag_return diag_result=lanczos_diagonalize(matrix,states.size(), ham.lanczosNE);
+    
+    deallocate_memory();
+    
     diag_result.sector_indicator=m;
-    results.push_back(diag_result);
     
     cout<<"Here is the diagonalization result: "<<endl;
     ofstream printresult;
     printresult.open("printresult.txt");
     int evcount = ham.lanczosNE;
-    for(auto it : results)
+    for(auto it : diag_results)
     {
         int evcount = ham.lanczosNE;
         bool short_output_mode = (evcount > 0);
