@@ -45,7 +45,7 @@
 #include <bitset>
 #include <algorithm>
 
-#include <lanczos.h>
+#include <lanczosdiag.h>
 
 using namespace std;
 #include "mkl_lapacke.h"
