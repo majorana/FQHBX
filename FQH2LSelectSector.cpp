@@ -325,7 +325,7 @@ double V_inter_co(int k, int m, double a, double b, int Ns)
         double qy = 2 * pi * q2/b;
         double q = sqrt(qx * qx + qy * qy + SmallMomentum);
         if (q != 0)
-        v += 2.0 * exp(-ham.d * q)/q * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
+        v += exp(-ham.d * q)/q * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
         else
         cout<<"q = 0"<<endl;
     }
