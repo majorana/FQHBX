@@ -618,7 +618,7 @@ void build_Interaction_mat_dryrun(vector<State> states,
 
         count++;
         if(count %10000 == 0) cout<<"dry run: 10000 states finished, "<<((double)count)/states.size()*100<<"% finished"<<endl;
-        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count/4);
+        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count/2);
         if(count %10000 == 0) cout<<"The number of matrix elements for this state is: "<<fast_size[it.state_id-StateIdShift]<<endl;
     }
 }
@@ -1034,6 +1034,7 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
     }
 
     compute_Coulomb_Forms(orblist);
+    compute_Interlayer_Coulomb_Forms(orblist);
     cout<<"Coulomb factors generated!"<<endl;
 
     //maps from orbital to orbital id //OK
