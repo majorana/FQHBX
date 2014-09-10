@@ -48,7 +48,7 @@
 #include <unordered_map>
 #include <bitset>
 #include <algorithm>
-#include <lanczos.h>
+#include "lanczosdiag.h"
 using namespace std;
 #include "mkl_lapacke.h"
 const double pi = 3.14159;
