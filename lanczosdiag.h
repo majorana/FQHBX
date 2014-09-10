@@ -49,9 +49,9 @@ void lanczos_diag(int dim, int nevec, vector<ch_sparse_matrix>& matrix, vector<d
 void lanczos_diag(int dim, int nevec, vector<ch_sparse_matrix>& matrix, vector<double>& eigenvalues, vector<double>& variance, int maxstep=1000, int report=1000, int seed=123456);
 
 // Declaration of the interface to the corresponding Fortran routine
-extern "C" void _lanczos_diag_rs_(int *n, int *nevec, void (*matvec) (int*, double*, double*, bool*), double *eval, double *evec, double *variance, int *number, double *resolution, int *maxstep, int *report, int *seed);
+extern "C" void lanczos_diag_rs_(int *n, int *nevec, void (*matvec) (int*, double*, double*, bool*), double *eval, double *evec, double *variance, int *number, double *resolution, int *maxstep, int *report, int *seed);
 
-extern "C" void _lanczos_diag_ch_(int *n, int *nevec, void (*matvec) (int*, complex<double> *, complex<double> *, bool*), double *eval, complex<double>  *evec, double *variance, int *number, double *resolution, int *maxstep, int *report, int *seed);
+extern "C" void lanczos_diag_ch_(int *n, int *nevec, void (*matvec) (int*, complex<double> *, complex<double> *, bool*), double *eval, complex<double>  *evec, double *variance, int *number, double *resolution, int *maxstep, int *report, int *seed);
 
 void lanczos_diag(int dim, int nevec, void (*matvec) (int*, double*, double*, bool*), vector<double>& eigenvalues, vector<double>& variance, vector<rs_eigenvector>& eigenvectors, int maxstep, int report, int seed)
 {
@@ -61,7 +61,7 @@ void lanczos_diag(int dim, int nevec, void (*matvec) (int*, double*, double*, bo
 	double *reso = new double;
 	double *evec = new double[nevec * dim];
 	
-	_lanczos_diag_rs_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
+	lanczos_diag_rs_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
 	
 	eigenvalues.resize(nevec);
 	eigenvectors.resize(nevec);
@@ -97,7 +97,7 @@ void lanczos_diag(int dim, int nevec, void (*matvec) (int*, double*, double*, bo
     double *reso = new double;
     double *evec = new double[nevec * dim];
 
-    _lanczos_diag_rs_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
+    lanczos_diag_rs_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
 
     eigenvalues.resize(nevec);
     variance.resize(nevec);
@@ -122,7 +122,7 @@ void lanczos_diag(int dim, int nevec, void (*matvec) (int*, complex<double>  *, 
     double *reso = new double;
     complex<double>  *evec = new complex<double> [nevec * dim];
 
-    _lanczos_diag_ch_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
+    lanczos_diag_ch_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
 
     eigenvalues.resize(nevec);
     eigenvectors.resize(nevec);
@@ -160,7 +160,7 @@ void lanczos_diag(int dim, int nevec, void (*matvec) (int*, complex<double>  *, 
 
    complex<double>  *evec = new complex<double> [nevec * dim];
 
-    _lanczos_diag_ch_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
+    lanczos_diag_ch_(&dim, &nevec, matvec, eval, evec, vari, number, reso, &maxstep, &report, &seed);
 
     eigenvalues.resize(nevec);
     variance.resize(nevec);
