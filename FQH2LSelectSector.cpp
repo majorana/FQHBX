@@ -38,6 +38,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <cmath>
 #include <utility>
@@ -1108,8 +1109,8 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
                 break;
         }
         cout<<diag_result.sector_indicator<<" ";
-        if(abs(it2)<SmallDouble) cout<<" E = 0"<<endl;
-        else cout<<" E = "<<it2<<endl;
+        if(abs(it2)<SmallDouble) cout<< " E = 0"<<endl;
+        else cout<<" E = "<< std::setprecision(10)<< it2<<endl;
     }
     for (auto& it2 : diag_result.eigenvalues)
     {
@@ -1130,7 +1131,8 @@ int main()
     int sector;
     interaction = 'i';
     //cout <<"norb, nele, a, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
-    cin>>norb>>nele>>r>>t>>d>>sector>>nEv;
+    cin>>norb>>nele>>r>>t>>sector>>nEv;
     a = sqrt(pi*norb*r);
+    d = 0.5;
     run(norb, nele, a, t, d, sector, nEv, interaction);
 }
