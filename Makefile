@@ -1,4 +1,4 @@
-all: 2
+all: S
 2:
 	 g++ -std=c++11 -O3 -o FQH2L FQH2L.cpp lanczos.a -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lifcore -lgfortran
 
