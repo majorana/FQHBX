@@ -48,7 +48,7 @@
 #include <unordered_map>
 #include <bitset>
 #include <algorithm>
-#include <lanczos.h>
+#include <lanczosdiag.h>
 using namespace std;
 #include "mkl_lapacke.h"
 const double pi = 3.14159;
@@ -985,10 +985,12 @@ int run(int norb, int nEle, double a, double t, int sector, int lanczosNE, char 
 int main()
 {
     int norb, nele, nEv;
-    double a, t;
+    double a, t, r;
     char interaction;
     int sector;
-    cout <<"norb, nele, a, t, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential)"<<endl;
-    cin>>norb>>nele>>a>>t>>sector>>nEv>>interaction;
+    interaction = 'c';
+    //cout <<"norb, nele, a, t, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential)"<<endl;
+    cin>>norb>>nele>>r>>t>>sector>>nEv;
+    a = sqrt(pi*norb*r);
     run(norb, nele, a, t, sector,nEv, interaction);
 }
