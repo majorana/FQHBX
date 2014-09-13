@@ -1130,10 +1130,9 @@ int main()
     double a, t, r, d;
     char interaction;
     int sector;
-    interaction = 'i';
+    //interaction = 'p';
     //cout <<"norb, nele, a, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
-    cin>>norb>>nele>>r>>t>>sector>>nEv;
+    cin>>norb>>nele>>r>>t>>d>>sector>>nEv>>interaction;
     a = sqrt(pi*norb*r);
-    d = 0.5;
     run(norb, nele, a, t, d, sector, nEv, interaction);
 }
