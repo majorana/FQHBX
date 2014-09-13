@@ -94,11 +94,6 @@ struct Orbital
     Orbital operator+ (const Orbital &rhs) const
     {
         Orbital temp( (m+rhs.m)%ham.mrange, layer);
-        if (layer != rhs.layer)
-        {
-            cout<<"Orbital addition error: cannot add two orbitals in different layers"<<endl;
-            abort();
-        }
         return temp;
     }
     Orbital(){}
@@ -123,11 +118,6 @@ struct OrbPair
     OrbPair(const Orbital& orba, const Orbital& orbb)
     {
         orb1 = orba, orb2 = orbb; m=((orb1.m+orb2.m)%ham.mrange);
-        if (orb1.layer != orb2.layer)
-        {
-            cout<<"OrbPair error: cannot form pairs in different layers"<<endl;
-            abort();
-        }
         layer = orb1.layer;
     }
 };
@@ -200,7 +190,7 @@ ostream& operator<<(ostream& os, const Orbital& orb)
 
 ostream& operator<<(ostream& os, OrbPair& pair)
 {
-    os << "Orbital m1 = " << pair.orb1.m << "\tOrbital m2 = "<< pair.orb2.m << "\t Layer: "<<(int) pair.orb1.layer;
+    os << "Orbital m1 = " << pair.orb1.m << "\tOrbital m2 = "<< pair.orb2.m << "\t Layer: "<<(int) pair.orb1.layer<<" "<<(int) pair.orb2.layer;
     return os;
 }
 ostream& operator<<(ostream & os, MatEle & mat_ele)
@@ -365,9 +355,8 @@ void compute_Interlayer_Coulomb_Forms(vector<Orbital> orblist)
         if ((n1+n2)%ham.mrange == (n3+n4)%ham.mrange )
         {
             if (ham.interaction == 'i' || ham.interaction == 'I')
-            ham.CoulombFormInterlayer[n1][n2][n3][n4] = V_inter_co(n1-n3, n1-n4, ham.a, ham.b, ham.mrange);
-            else
-            ham.CoulombFormInterlayer[n1][n2][n3][n4] = 0;
+            ham.CoulombFormInterlayer[n1][n2+ham.mrange][n3+ham.mrange][n4] = V_inter_co(n1-n3, n1-n4, ham.a, ham.b, ham.mrange);
+
         }
         else
         ham.CoulombFormInterlayer[n1][n2][n3][n4] = 0;
@@ -393,23 +382,29 @@ PairGroup generate_pair_list(vector<Orbital> orblist, char layer)
     {
         for (int id1 = 0; id1 < ham.mrange; id1++)
             for (int id2 = 0; id2 < ham.mrange; id2++)
-            {
                 if (id1 != id2)
                 {
                     thelist[orblist[id1]+orblist[id2]].push_back(OrbPair(orblist[id1], orblist[id2]));
                 }
-            }
     }
     else if (layer == 2)
     {
         for (int id1 = ham.mrange; id1 < ham.norb; id1++)
             for (int id2 = ham.mrange; id2 < ham.norb; id2++)
-            {
                 if (id1 != id2)
                 {
                     thelist[orblist[id1]+orblist[id2]].push_back(OrbPair(orblist[id1], orblist[id2]));
                 }
+    }
+    else if (layer == 12)
+    {
+        for (int id1 = 0; id1 < ham.mrange; id1++) //the first one is on layer 1
+        {
+            for (int id2 = ham.mrange; id2 < ham.norb; id2++) //the second one is on layer 2
+            {
+                thelist[orblist[id1] + orblist[id2]].push_back(OrbPair(orblist[id1], orblist[id2]));
             }
+        }
     }
     else
     {
@@ -550,6 +545,7 @@ void build_Interaction_mat_dryrun(vector<State> states,
         ReferenceMap &reference_list,
         PairGroup &pairlist1,
         PairGroup &pairlist2,
+        PairGroup &pairlist12,
         vector<Orbital> &orblist,
         OrbMap &orb_idlist)
 {
@@ -599,28 +595,30 @@ void build_Interaction_mat_dryrun(vector<State> states,
                 }
 
         //And, of course, we build up the cross terms
-        for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
-        for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2 + ham.mrange])
+        for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1]) //pos1 is in layer 1
+        for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2]) //pos2 is in layer 2
         {
             Orbital totalprop = orblist[pos1] + orblist[pos2];
-            vector<OrbPair> possible_pairs = pairlist1[totalprop]; //check if interlayer pairs are considered
+            vector<OrbPair> possible_pairs = pairlist12[totalprop]; //check if interlayer pairs are considered
             for (auto it2 : possible_pairs)
             {
-                int new1 = orb_idlist[it2.orb1];
-                int new2 = orb_idlist[it2.orb2];
+                int new1 = orb_idlist[it2.orb1]; //new1 is in layer 1
+                int new2 = orb_idlist[it2.orb2]; //new2 is in layer 2
                 CompactState tempcstate = it.cstate;
                 tempcstate[pos1] = 0;
                 tempcstate[pos2] = 0;
                 
-                if ((!tempcstate[new1]) && (!tempcstate[new2 + ham.mrange]))
+                if ((!tempcstate[new1]) && (!tempcstate[new2]))
                 if(abs(ham.CoulombFormInterlayer[new1][new2][pos2][pos1])>SmallDouble)
-                one_state_mat_ele_count++;
+                {
+                    one_state_mat_ele_count++;
+                }
             }
         }
 
         count++;
         if(count %10000 == 0) cout<<"dry run: 10000 states finished, "<<((double)count)/states.size()*100<<"% finished"<<endl;
-        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count/2);
+        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count);
         if(count %10000 == 0) cout<<"The number of matrix elements for this state is: "<<fast_size[it.state_id-StateIdShift]<<endl;
     }
 }
@@ -634,6 +632,7 @@ void allocate_memory()
 
     for (int i = 0; i < ham.matrixsize; i++)
     {
+ //       cout<<"Allocating "<<i<<" of "<<ham.matrixsize<<" as "<<fast_size[i]<<endl;
         fast_ket_list[i] = new int[fast_size[i]];
         fast_amp_list[i] = new double[fast_size[i]];
         fast_count[i] = 0;
@@ -717,6 +716,7 @@ void build_Interaction_mat(vector<State> states,
         ReferenceMap &reference_list,
         PairGroup &pairlist1,
         PairGroup &pairlist2,
+        PairGroup &pairlist12,
         vector<Orbital> &orblist,
         OrbMap &orb_idlist)
 {
@@ -739,7 +739,7 @@ void build_Interaction_mat(vector<State> states,
                         tempcstate[pos1] = 0;
                         tempcstate[pos2] = 0;
 
-                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                        if ((!tempcstate[new1]) && (!tempcstate[new2]) && new1 != new2)
                         {
                             if (it2.orb1.layer == it2.orb2.layer)
                             {
@@ -815,7 +815,7 @@ void build_Interaction_mat(vector<State> states,
                         tempcstate[pos1] = 0;
                         tempcstate[pos2] = 0;
 
-                        if ((!tempcstate[new1]) && (!tempcstate[new2]))
+                        if ((!tempcstate[new1]) && (!tempcstate[new2])&& new1 != new2)
                         {
                             if (it2.orb1.layer == it2.orb2.layer)
                             {
@@ -878,24 +878,24 @@ void build_Interaction_mat(vector<State> states,
 
         //Then we run through the cross terms. We treat this in a weird way and this is asked to be taken extra careful of.
         for (int pos1 = 0; pos1 < ham.mrange; pos1++) if (it.cstate[pos1])
-        for (int pos2 = 0; pos2 < ham.mrange; pos2++)if (it.cstate[pos2 + ham.mrange])//pos2 is fake! We write in this way to use the same layer arithmatics, but the real position is pos2+mrange
+        for (int pos2 = ham.mrange; pos2 < ham.norb; pos2++)if (it.cstate[pos2])//pos2 is fake! We write in this way to use the same layer arithmatics, but the real position is pos2+mrange
         {
             Orbital orb1 = orblist[pos1];
             Orbital orb2 = orblist[pos2];
             
             Orbital totalprop = orblist[pos1] + orblist[pos2];
-            vector<OrbPair> possible_pairs = pairlist1[totalprop];
+            vector<OrbPair> possible_pairs = pairlist12[totalprop];
             for (auto it2 : possible_pairs)
             {
                 int new1 = orb_idlist[it2.orb1];
-                int new2 = orb_idlist[it2.orb2]; //new2 should be added with mrange when doing any operations
+                int new2 = orb_idlist[it2.orb2];
                 CompactState tempcstate = it.cstate;
                 tempcstate[pos1] = 0;
-                tempcstate[pos2 + ham.mrange] = 0;
+                tempcstate[pos2] = 0;
                 
-                if ((!tempcstate[new1]) && (!tempcstate[new2 + ham.mrange]))
+                if ((!tempcstate[new1]) && (!tempcstate[new2]))
                 {
-                    if (it2.orb1.layer == it2.orb2.layer)
+                    if (it2.orb1.layer != it2.orb2.layer)
                     {
                         CompactState tempcstate(it.cstate);
                         
@@ -904,14 +904,15 @@ void build_Interaction_mat(vector<State> states,
                         //applying the operators
                         for (int i = 0; i < pos1; i++) if (tempcstate[i]) sign_counter++;
                         tempcstate[pos1] = 0;
-                        for (int i = 0; i < pos2 + ham.mrange; i++) if (tempcstate[i]) sign_counter++;
-                        tempcstate[pos2 + ham.mrange] = 0;
-                        for (int i = 0; i < new2 + ham.mrange; i++) if (tempcstate[i]) sign_counter++;
-                        tempcstate[new2 + ham.mrange] = 1;
+                        for (int i = 0; i < pos2; i++) if (tempcstate[i]) sign_counter++;
+                        tempcstate[pos2] = 0;
+                        for (int i = 0; i < new2; i++) if (tempcstate[i]) sign_counter++;
+                        tempcstate[new2] = 1;
                         for (int i = 0; i < new1; i++) if (tempcstate[i]) sign_counter++;
                         tempcstate[new1] = 1;
                         
                         int newid = reference_list[tempcstate.to_ullong()];
+   //                     cout<<it.state_id<<", "<<newid-StateIdShift<<"->"<<ham.CoulombFormInterlayer[new1][new2][pos2][pos1]<<endl;
                         
                         if (newid == 0)
                         {
@@ -925,6 +926,7 @@ void build_Interaction_mat(vector<State> states,
                         MatEle mat_ele;
                         mat_ele.bra = it.state_id - StateIdShift;
                         mat_ele.ket = newid - StateIdShift;
+
                         if (mat_ele.bra > mat_ele.ket) //lower triangle, keep the matrix element
                         {
                             double amplitude = ham.CoulombFormInterlayer[new1][new2][pos2][pos1];
@@ -952,6 +954,7 @@ void build_Interaction_mat(vector<State> states,
                     }
                 }
             }
+            
         }
 
         
@@ -966,6 +969,7 @@ void build_Interaction_mat(vector<State> states,
 
         if(count %10000 == 0) cout<<"10000 states finished, "<<((double)count)/states.size()*100<<"% finished"<<endl;
     }
+     //   for(int i = 0; i < states.size(); i++) cout<<"number of matrix elements for state "<<i<<" is "<<fast_count[i]<<endl;
 }
 
 void deallocate_memory()
@@ -1002,14 +1006,32 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     diag_return returnvalue;
 
     vector<double> variance;
+    
+//    for (int i = 0; i < ham.matrixsize; i++)
+ //       for (int j = 0; j < fast_count[i]; j++)
+ //           cout<<"H"<<i<<","<<fast_ket_list[i][j]<<" = "<<fast_amp_list[i][j]<<endl;
+//    vector<vector<double> > mat(size);
+//    for (auto & it : mat) it.resize(size);
+//    for (int i = 0; i < ham.matrixsize; i++)
+//        for (int j = 0; j < fast_count[i]; j++)
+//        {
+//            mat[i][fast_ket_list[i][j]] += fast_amp_list[i][j];
+//            mat[fast_ket_list[i][j]][i] += fast_amp_list[i][j];
+//        }
 
+  //  for (auto it : mat)
+  //  {
+  //      for(auto it2 : it) cout<<fixed<<it2<<"\t";    
+  //      cout<<endl;
+  //  }
+   
     lanczos_diag(size, nevals, matvec, returnvalue.eigenvalues, variance);
 
     return returnvalue;
 }
 
 
-int run(int norb, int nEle, double a, double t, double d, int sector, int lanczosNE, char interaction)
+int run(int norb, int nEle, double r, double t, double d, int sector, int lanczosNE, char interaction)
 {
     cout<<"Fractional Quantum Hall System on Torus"<<endl;
     cout<<"Norb: "<<norb<<"\nn_electron: "<<nEle<<"\nt: "<<t<<"\nd: "<<d<<"\nsector: "<<sector<<endl;
@@ -1020,8 +1042,8 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
     ham.norb = norb;
     ham.mrange = norb/2;
     ham.t=t;
-    ham.a = a;
-    ham.b = 2*pi * ham.mrange / a;
+    ham.a = sqrt(2*pi*ham.mrange*r);
+    ham.b = sqrt(2*pi * ham.mrange/r);
     ham.interaction = interaction;
     ham.sector = sector;
     ham.d = d;
@@ -1063,6 +1085,16 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
             cout<<it2<<endl;
         cout<<endl;
     }
+    PairGroup pairlist12 = generate_pair_list(orblist, 12);
+    
+    for (auto it : pairlist12)
+    {
+        cout << it.first<<endl;
+        for (auto it2 : it.second)
+            cout<<it2<<endl;
+        cout<<endl;
+    }
+    
     cout<<"================================================"<<endl;
     //generate the list of states with a specific momentum
     //"generation of the LOCAL Hilbert space"
@@ -1070,6 +1102,8 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
     ReferenceMap reference_list;
     generate_state_list(orblist, states, reference_list);
     ham.matrixsize = states.size();
+//    for (auto it : states)
+//        cout<<it<<endl;
     ////////////////////////////////////////////////////////////////////////////
     //Generate the matrix elements and diagonalize matrices
     //for each momentum sector.
@@ -1081,14 +1115,14 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
 
     //A dry run first to determine the interaction matrix size
     build_hopping_mat_dryrun(states, reference_list, orblist);
-    build_Interaction_mat_dryrun(states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
+    build_Interaction_mat_dryrun(states, reference_list, pairlist1, pairlist2, pairlist12, orblist, orb_idlist);
 
     allocate_memory();
 
     //Then we calculate the hopping matrix first, because it's easier...
     build_hopping_mat(states, reference_list, orblist);
     cout<<"Finished the hopping matrix"<<endl;
-    build_Interaction_mat(states, reference_list, pairlist1, pairlist2, orblist, orb_idlist);
+    build_Interaction_mat(states, reference_list, pairlist1, pairlist2, pairlist12, orblist, orb_idlist);
     cout<<"Finished the interaction matrix"<<endl;
 
     cout<<"Using Haldane's Lanczos"<<endl;
@@ -1127,12 +1161,10 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
 int main()
 {
     int norb, nele, nEv;
-    double a, t, r, d;
+    double r, t, d;
     char interaction;
     int sector;
-    //interaction = 'p';
-    //cout <<"norb, nele, a, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
+    //cout <<"norb, nele, r, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
     cin>>norb>>nele>>r>>t>>d>>sector>>nEv>>interaction;
-    a = sqrt(pi*norb*r);
-    run(norb, nele, a, t, d, sector, nEv, interaction);
+    run(norb, nele, r, t, d, sector,nEv, interaction);
 }
