@@ -608,13 +608,15 @@ void build_Interaction_mat_dryrun(vector<State> states,
                 
                 if ((!tempcstate[new1]) && (!tempcstate[new2]))
                 if(abs(ham.CoulombFormInterlayer[new1][new2][pos2][pos1])>SmallDouble)
-                one_state_mat_ele_count++;
+                {
+                    one_state_mat_ele_count++;
+                }
             }
         }
 
         count++;
         if(count %10000 == 0) cout<<"dry run: 10000 states finished, "<<((double)count)/states.size()*100<<"% finished"<<endl;
-        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count/2);
+        fast_size[it.state_id-StateIdShift] += (one_state_mat_ele_count);
         if(count %10000 == 0) cout<<"The number of matrix elements for this state is: "<<fast_size[it.state_id-StateIdShift]<<endl;
     }
 }
@@ -628,7 +630,7 @@ void allocate_memory()
 
     for (int i = 0; i < ham.matrixsize; i++)
     {
-        cout<<"Allocating "<<i<<" of "<<ham.matrixsize<<" as "<<fast_size[i]<<endl;
+ //       cout<<"Allocating "<<i<<" of "<<ham.matrixsize<<" as "<<fast_size[i]<<endl;
         fast_ket_list[i] = new int[fast_size[i]];
         fast_amp_list[i] = new double[fast_size[i]];
         fast_count[i] = 0;
@@ -908,7 +910,7 @@ void build_Interaction_mat(vector<State> states,
                         tempcstate[new1] = 1;
                         
                         int newid = reference_list[tempcstate.to_ullong()];
-                        cout<<it.state_id<<", "<<newid-StateIdShift<<"->"<<ham.CoulombFormInterlayer[new1][new2][pos2][pos1]<<endl;
+   //                     cout<<it.state_id<<", "<<newid-StateIdShift<<"->"<<ham.CoulombFormInterlayer[new1][new2][pos2][pos1]<<endl;
                         
                         if (newid == 0)
                         {
@@ -965,24 +967,19 @@ void build_Interaction_mat(vector<State> states,
 
         if(count %10000 == 0) cout<<"10000 states finished, "<<((double)count)/states.size()*100<<"% finished"<<endl;
     }
+     //   for(int i = 0; i < states.size(); i++) cout<<"number of matrix elements for state "<<i<<" is "<<fast_count[i]<<endl;
 }
 
 void deallocate_memory()
 {
     for (int i = 0; i < ham.matrixsize; i++)
     {
-        cout<<"deleting "<<i<<" of "<<ham.matrixsize<<endl;
         delete [] fast_ket_list[i];
-        cout<<"aha "<<endl;
         delete [] fast_amp_list[i];
     }
-    cout<<"deleting fast_size"<<endl;
     delete [] fast_size;
-    cout<<"deleting fast_count"<<endl;
     delete [] fast_count;
-    cout<<"deleting fast_amp_list"<<endl;
     delete [] fast_amp_list;
-    cout<<"deleting fast_ket_list"<<endl;
     delete [] fast_ket_list;
 
 
@@ -1032,7 +1029,7 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
 }
 
 
-int run(int norb, int nEle, double a, double t, double d, int sector, int lanczosNE, char interaction)
+int run(int norb, int nEle, double r, double t, double d, int sector, int lanczosNE, char interaction)
 {
     cout<<"Fractional Quantum Hall System on Torus"<<endl;
     cout<<"Norb: "<<norb<<"\nn_electron: "<<nEle<<"\nt: "<<t<<"\nd: "<<d<<"\nsector: "<<sector<<endl;
@@ -1043,8 +1040,8 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
     ham.norb = norb;
     ham.mrange = norb/2;
     ham.t=t;
-    ham.a = a;
-    ham.b = 2*pi * ham.mrange / a;
+    ham.a = sqrt(2*pi*ham.mrange*r);
+    ham.b = sqrt(2*pi * ham.mrange/r);
     ham.interaction = interaction;
     ham.sector = sector;
     ham.d = d;
@@ -1103,8 +1100,8 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
     ReferenceMap reference_list;
     generate_state_list(orblist, states, reference_list);
     ham.matrixsize = states.size();
-    for (auto it : states)
-        cout<<it<<endl;
+//    for (auto it : states)
+//        cout<<it<<endl;
     ////////////////////////////////////////////////////////////////////////////
     //Generate the matrix elements and diagonalize matrices
     //for each momentum sector.
@@ -1155,17 +1152,17 @@ int run(int norb, int nEle, double a, double t, double d, int sector, int lanczo
         else printresult<<" E = "<<it2<<endl;
     }
 
-//    deallocate_memory();
+    deallocate_memory();
     return 0;
 }
 
 int main()
 {
     int norb, nele, nEv;
-    double a, t, d;
+    double r, t, d;
     char interaction;
     int sector;
-    cout <<"norb, nele, a, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
-    cin>>norb>>nele>>a>>t>>d>>sector>>nEv>>interaction;
-    run(norb, nele, a, t, d, sector,nEv, interaction);
+    cout <<"norb, nele, r, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
+    cin>>norb>>nele>>r>>t>>d>>sector>>nEv>>interaction;
+    run(norb, nele, r, t, d, sector,nEv, interaction);
 }
