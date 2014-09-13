@@ -1055,7 +1055,7 @@ int run(int norb, int nEle, double r, double t, double d, int sector, int lanczo
         return 1;
     }
 
-  //  compute_Coulomb_Forms(orblist);
+    compute_Coulomb_Forms(orblist);
     compute_Interlayer_Coulomb_Forms(orblist);
     cout<<"Coulomb factors generated!"<<endl;
 
