@@ -80,6 +80,7 @@ struct Hamiltonian
     long long int matrixsize;
     int matrixdimension;
     double d; // interlayer distance
+    double V1, V3; // pseudo-potential
 };
 
 Hamiltonian ham; //The global object that provides all complicated parameters
@@ -285,7 +286,7 @@ double Vco(int k, int m, double a, double b, int Ns)
 }
 
 //m1-m3=k, m1-m4=m
-double Vps(int k, int m, double a, double b, int Ns)
+double Vps(int k, int m, double a, double b, int Ns, double V1, double V3)
 {
     int cutoff = 50;
     double v = 0;
@@ -297,7 +298,7 @@ double Vps(int k, int m, double a, double b, int Ns)
             double qx = 2 * pi * q1/a;
             double qy = 2 * pi * q2/b;
             double q = sqrt(qx * qx + qy * qy);
-            v += 1.0*(1-q*q) * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
+            v += (V1*(1-q*q) + 0.5*V3*(q*q*q*q-4*q*q+2)) * exp(-0.5 * q * q) * cos(2 * pi * q1 * k / Ns);
         }
     return v/Ns;
 }
@@ -333,8 +334,8 @@ void compute_Coulomb_Forms(vector<Orbital> orblist)
             {
                 if (ham.interaction == 'c' || ham.interaction == 'C' || ham.interaction == 'i' || ham.interaction == 'I')
                     ham.CoulombForm[n1][n2][n3][n4] = Vco(n1-n3, n1-n4, ham.a, ham.b, ham.mrange);
-                else if (ham.interaction == 'p' || ham.interaction == 'P')
-                    ham.CoulombForm[n1][n2][n3][n4] = Vps(n1-n3, n1-n4, ham.a, ham.b, ham.mrange);
+                else if (ham.interaction == 'p' || ham.interaction == 'P' || ham.interaction == 'i' || ham.interaction == 'I')
+                    ham.CoulombForm[n1][n2][n3][n4] = Vps(n1-n3, n1-n4, ham.a, ham.b, ham.mrange, ham.V1, ham.V3);
                 else
                 {
                     cout<<"Error: interaction form "<<ham.interaction<<" does not exist"<<endl;
@@ -1030,12 +1031,18 @@ diag_return lanczos_diagonalize(Matrix & matrix, int size, int nevals)
     return returnvalue;
 }
 
-
-int run(int norb, int nEle, double r, double t, double d, int sector, int lanczosNE, char interaction)
+string d2s(double r)
+{
+    char buf[100];
+    sprintf(buf, "%.2f", r);
+    return string(buf);
+}
+ 
+int run(int norb, int nEle, double r, double t, double d, int sector, int lanczosNE, char interaction, double V1, double V3)
 {
     cout<<"Fractional Quantum Hall System on Torus"<<endl;
     cout<<"Norb: "<<norb<<"\nn_electron: "<<nEle<<"\nt: "<<t<<"\nd: "<<d<<"\nsector: "<<sector<<endl;
-
+    string filename;
 
     ham.nele = nEle;
     ham.lanczosNE=lanczosNE;
@@ -1047,7 +1054,10 @@ int run(int norb, int nEle, double r, double t, double d, int sector, int lanczo
     ham.interaction = interaction;
     ham.sector = sector;
     ham.d = d;
+    ham.V1=V1;
+    ham.V3=V3;
 
+    filename = "Energy_N="+to_string(nEle) + "_Orb="+to_string(norb)+"_k="+to_string(sector)+"_r="+d2s(r)+"_t="+d2s(t)+"_d="+d2s(d) + "_V1="+d2s(V1) + "_V3="+d2s(V3) + ".dat";
 
     vector<Orbital> orblist=generate_orblist();
     for (auto it : orblist) cout<<it<<endl;
@@ -1121,11 +1131,11 @@ int run(int norb, int nEle, double r, double t, double d, int sector, int lanczo
 
     //Then we calculate the hopping matrix first, because it's easier...
     build_hopping_mat(states, reference_list, orblist);
-    cout<<"Finished the hopping matrix"<<endl;
+    //cout<<"Finished the hopping matrix"<<endl;
     build_Interaction_mat(states, reference_list, pairlist1, pairlist2, pairlist12, orblist, orb_idlist);
-    cout<<"Finished the interaction matrix"<<endl;
+    //cout<<"Finished the interaction matrix"<<endl;
 
-    cout<<"Using Haldane's Lanczos"<<endl;
+    //cout<<"Using Haldane's Lanczos"<<endl;
     diag_return diag_result=lanczos_diagonalize(matrix,states.size(), ham.lanczosNE);
 
 
@@ -1133,7 +1143,7 @@ int run(int norb, int nEle, double r, double t, double d, int sector, int lanczo
 
     cout<<"Here is the diagonalization result: "<<endl;
     ofstream printresult;
-    printresult.open("printresult.txt");
+    printresult.open(filename);
     int evcount = ham.lanczosNE;
     bool short_output_mode = (evcount > 0);
     for (auto& it2 : diag_result.eigenvalues)
@@ -1151,7 +1161,7 @@ int run(int norb, int nEle, double r, double t, double d, int sector, int lanczo
     {
         printresult<<diag_result.sector_indicator<<" ";
         if(abs(it2)<SmallDouble) printresult<<" E = 0"<<endl;
-        else printresult<<" E = "<<it2<<endl;
+        else printresult<<" E = "<<std::setprecision(10)<<it2<<endl;
     }
 
     deallocate_memory();
@@ -1162,9 +1172,10 @@ int main()
 {
     int norb, nele, nEv;
     double r, t, d;
+    double V1, V3;
     char interaction;
     int sector;
     //cout <<"norb, nele, r, t, d, m_sector, nEv, interaction(c for Coulomb, p for pseudopotential, i for Coulomb with interlayer interaction)"<<endl;
-    cin>>norb>>nele>>r>>t>>d>>sector>>nEv>>interaction;
-    run(norb, nele, r, t, d, sector,nEv, interaction);
+    cin>>norb>>nele>>r>>t>>d>>sector>>nEv>>interaction>>V1>>V3;
+    run(norb, nele, r, t, d, sector,nEv, interaction, V1, V3);
 }
